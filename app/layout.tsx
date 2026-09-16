@@ -55,7 +55,7 @@ export default function RootLayout({
         <AppProvider>
           <GlobalProgressBar />
           <AdminRouteGuard />
-          <HideOnRoute prefixes={['/admin', '/plans']}>
+          <HideOnRoute prefixes={['/admin', '/plans', '/pricing']}>
             <Navbar />
           </HideOnRoute>
           <main className="flex-1 w-full max-w-full overflow-x-clip">

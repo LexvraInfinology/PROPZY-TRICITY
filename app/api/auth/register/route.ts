@@ -25,7 +25,8 @@ export async function POST(req: NextRequest) {
     const cleanEmail = email.trim().toLowerCase();
     const cleanPhone = phone.trim();
     const cleanCity = (city && typeof city === 'string' && city.trim()) ? city.trim() : 'Mohali';
-    const selectedRole = (role === 'owner' || role === 'admin') ? role : 'tenant';
+    // Strictly prevent self-registration with admin or other privileged roles
+    const selectedRole = role === 'owner' ? 'owner' : 'tenant';
 
     // Helper to return response with JWT cookie
     const createAuthResponse = async (userPayload: { id: string; name: string; email: string; phone: string; role: 'tenant' | 'owner' | 'admin'; city?: string; wishlist?: string[] }, message: string) => {
@@ -39,7 +40,6 @@ export async function POST(req: NextRequest) {
       const response = NextResponse.json({
         success: true,
         message,
-        token,
         user: userPayload
       });
 

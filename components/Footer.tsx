@@ -1,14 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Home, ShieldCheck, Smartphone, Instagram, UserCheck, Percent, Heart,
   Building, Building2, Landmark, Hotel, Castle
 } from 'lucide-react';
-
-import { isValidEmail } from '@/lib/validation';
 
 const WhatsAppIcon: React.FC<{ size?: number; className?: string }> = ({ size = 14, className }) => (
   <svg
@@ -24,17 +22,6 @@ const WhatsAppIcon: React.FC<{ size?: number; className?: string }> = ({ size = 
 
 export const Footer: React.FC = () => {
   const pathname = usePathname();
-  const [emailInput, setEmailInput] = useState('');
-  const [subscribed, setSubscribed] = useState(false);
-  const handleSubscribe = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!isValidEmail(emailInput)) {
-      alert('Please enter a valid email address (e.g., name@example.com)');
-      return;
-    }
-    setSubscribed(true);
-    setEmailInput('');
-  };
 
   const majorCities = [
     { name: 'Mohali', href: '/properties?city=Mohali', icon: Building2 },
@@ -43,7 +30,6 @@ export const Footer: React.FC = () => {
     { name: 'Panchkula', href: '/properties?city=Panchkula', icon: Hotel },
     { name: 'Kharar', href: '/properties?city=Kharar', icon: Castle },
   ];
-
 
   // Hide Footer on Admin portal routes (called after all hook declarations)
   if (pathname && pathname.startsWith('/admin')) {
@@ -54,11 +40,11 @@ export const Footer: React.FC = () => {
     <footer className="bg-[#030604] text-gray-300 pt-12 sm:pt-16 pb-28 lg:pb-20 border-t border-emerald-950/80">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
         {/* ─────────────────────────────────────────────────────────────
-            TOP GRID: LOGO, LINKS & NEWSLETTER
+            TOP GRID: LOGO & LINKS
         ───────────────────────────────────────────────────────────── */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-8 lg:gap-10 pb-8">
           {/* Col 1: Brand & Socials */}
-          <div className="lg:col-span-3 space-y-4">
+          <div className="lg:col-span-4 space-y-4">
             <Link href="/" className="flex items-center space-x-2.5">
               <div className="w-9 h-9 rounded-xl bg-emerald-500 flex items-center justify-center text-black shadow-lg shadow-emerald-500/20">
                 <Home size={20} className="stroke-[2.5]" />
@@ -73,8 +59,8 @@ export const Footer: React.FC = () => {
               </div>
             </Link>
 
-            <p className="text-xs text-gray-400 leading-relaxed">
-              Your trusted platform for verified rental properties. 0% brokerage. 100% transparency.
+            <p className="text-xs text-gray-400 leading-relaxed max-w-sm">
+              Your trusted platform for verified rental properties. <br /> 0% brokerage. 100% transparency.
             </p>
 
             {/* Social Icons Row */}
@@ -115,7 +101,7 @@ export const Footer: React.FC = () => {
           </div>
 
           {/* Col 3: COMPANY */}
-          <div className="lg:col-span-2 space-y-3">
+          <div className="lg:col-span-3 space-y-3">
             <h4 className="text-xs font-extrabold uppercase text-white tracking-widest">COMPANY</h4>
             <ul className="space-y-2 text-xs text-gray-400">
               <li><Link href="/about" className="hover:text-emerald-400 transition-colors">About Us</Link></li>
@@ -127,48 +113,16 @@ export const Footer: React.FC = () => {
           </div>
 
           {/* Col 4: SUPPORT */}
-          <div className="lg:col-span-2 space-y-3">
+          <div className="lg:col-span-3 space-y-3">
             <h4 className="text-xs font-extrabold uppercase text-white tracking-widest">SUPPORT</h4>
             <ul className="space-y-2 text-xs text-gray-400">
               <li><Link href="/help" className="hover:text-emerald-400 transition-colors">Help Center</Link></li>
               <li><Link href="/safety" className="hover:text-emerald-400 transition-colors">Safety & Security</Link></li>
               <li><Link href="/terms" className="hover:text-emerald-400 transition-colors">Terms of Use</Link></li>
               <li><Link href="/privacy" className="hover:text-emerald-400 transition-colors">Privacy Policy</Link></li>
+              <li><Link href="/refund" className="hover:text-emerald-400 transition-colors">Cancellation & Refund Policy</Link></li>
               <li><Link href="/faq" className="hover:text-emerald-400 transition-colors">FAQ</Link></li>
             </ul>
-
-          </div>
-
-          {/* Col 5: NEWSLETTER */}
-          <div className="lg:col-span-3 space-y-3">
-            <h4 className="text-xs font-extrabold uppercase text-white tracking-widest">NEWSLETTER</h4>
-            <p className="text-xs text-gray-400">
-              Get the latest property updates and rental insights straight to your inbox.
-            </p>
-            {subscribed ? (
-              <div className="text-xs text-emerald-400 font-bold bg-emerald-950/60 border border-emerald-800 p-2.5 rounded-xl">
-                ✓ Thank you for subscribing!
-              </div>
-            ) : (
-              <form onSubmit={handleSubscribe} className="flex items-center space-x-2">
-                <input
-                  type="email"
-                  required
-                  suppressHydrationWarning
-                  placeholder="Enter your email"
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  className="bg-[#09110c] border border-emerald-950 text-xs text-white placeholder-gray-500 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-emerald-500 flex-1"
-                />
-                <button
-                  type="submit"
-                  suppressHydrationWarning
-                  className="w-9 h-9 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center font-extrabold shrink-0 shadow-md transition-transform active:scale-95 cursor-pointer"
-                >
-                  →
-                </button>
-              </form>
-            )}
           </div>
         </div>
 
@@ -251,10 +205,12 @@ export const Footer: React.FC = () => {
 
           {/* Legal Links & Attribution */}
           <div className="order-1 md:order-2 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 text-[11px] sm:text-xs">
-            <div className="flex items-center justify-center space-x-3 text-gray-400">
+            <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-gray-400">
               <Link href="/terms" className="hover:text-emerald-400 transition-colors">Terms of Use</Link>
               <span className="text-gray-700">•</span>
               <Link href="/privacy" className="hover:text-emerald-400 transition-colors">Privacy Policy</Link>
+              <span className="text-gray-700">•</span>
+              <Link href="/refund" className="hover:text-emerald-400 transition-colors">Cancellation & Refund</Link>
             </div>
 
             <span className="hidden sm:inline text-gray-700">•</span>

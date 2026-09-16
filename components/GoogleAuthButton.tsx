@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { UserProfile } from '@/store/useAppStore';
 
 interface GoogleAuthButtonProps {
@@ -26,11 +26,19 @@ export const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({
   const [sdkReady, setSdkReady] = useState(false);
   const hiddenBtnRef = useRef<HTMLDivElement>(null);
 
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef = useRef(onError);
+
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+    onErrorRef.current = onError;
+  }, [onSuccess, onError]);
+
   const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
 
-  const handleCredentialResponse = async (response: any) => {
+  const handleCredentialResponse = useCallback(async (response: any) => {
     if (!response || !response.credential) {
-      onError('No credential received from Google.');
+      onErrorRef.current('No credential received from Google.');
       setLoading(false);
       return;
     }
@@ -45,16 +53,16 @@ export const GoogleAuthButton: React.FC<GoogleAuthButtonProps> = ({
 
       const data = await res.json();
       if (data.success && data.user) {
-        onSuccess(data.user);
+        onSuccessRef.current(data.user);
       } else {
-        onError(data.message || 'Google authentication failed.');
+        onErrorRef.current(data.message || 'Google authentication failed.');
       }
     } catch (err: any) {
-      onError(err?.message || 'Network error during Google authentication.');
+      onErrorRef.current(err?.message || 'Network error during Google authentication.');
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     // Check if Google GSI SDK is loaded on window

@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Building, ShieldCheck, Search, Filter, RefreshCw, PlusCircle,
-  CheckCircle2, Clock, Trash2, Edit3, Star, X, MapPin, Phone, XCircle
+  CheckCircle2, Clock, Trash2, Edit3, Star, X, MapPin, Phone, XCircle, Video, ExternalLink
 } from 'lucide-react';
 import { PropertyItem } from '@/lib/seedData';
 import { useApp } from '@/context/AppContext';
@@ -99,6 +99,8 @@ function AdminPropertiesContent() {
     if (statusFilter === 'verified' && !item.verified) return false;
     if (statusFilter === 'pending' && item.verified) return false;
     if (statusFilter === 'featured' && !item.featured) return false;
+    if (statusFilter === 'active' && item.available === false) return false;
+    if (statusFilter === 'inactive' && item.available !== false) return false;
 
     return true;
   });
@@ -106,6 +108,50 @@ function AdminPropertiesContent() {
   const displayedProperties = filteredProperties.slice(0, visibleCount);
 
   // Actions
+  const handleActiveToggle = async (id: string, currentAvailable: boolean) => {
+    if (actionPendingId) return;
+    setActionPendingId(id);
+    const newAvailableStatus = !currentAvailable;
+
+    setProperties(prev => {
+      const updated = prev.map(p =>
+        (p._id === id || p.pid === id || p.id === id)
+          ? { ...p, available: newAvailableStatus }
+          : p
+      );
+      setCachedProperties(updated, true);
+      return updated;
+    });
+
+    try {
+      const res = await fetch(`/api/properties/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ available: newAvailableStatus })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.message || 'Failed to update active status');
+      }
+      showToast(newAvailableStatus ? `Listing ${id} is now Active (Visible in listings)` : `Listing ${id} is now Inactive (Hidden from listings)`);
+    } catch (e: any) {
+      console.error('Active toggle error:', e);
+      // Revert optimistic update
+      setProperties(prev => {
+        const reverted = prev.map(p =>
+          (p._id === id || p.pid === id || p.id === id)
+            ? { ...p, available: currentAvailable }
+            : p
+        );
+        setCachedProperties(reverted, true);
+        return reverted;
+      });
+      showToast(`Failed to update active status: ${e.message || 'Server error'}`);
+    } finally {
+      setActionPendingId(null);
+    }
+  };
+
   const handleVerifyToggle = async (id: string, currentVerified: boolean) => {
     if (actionPendingId) return;
     setActionPendingId(id);
@@ -330,7 +376,7 @@ function AdminPropertiesContent() {
           </select>
         </div>
 
-        {/* Verification / Feature Status */}
+        {/* Verification / Feature / Active Status */}
         <div>
           <select
             value={statusFilter}
@@ -338,6 +384,8 @@ function AdminPropertiesContent() {
             className="w-full px-2.5 py-1.5 sm:px-3 sm:py-2.5 bg-[#050806] border border-emerald-900/80 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold text-white focus:outline-none focus:border-emerald-500 cursor-pointer"
           >
             <option value="all">All Statuses</option>
+            <option value="active">Active Only (Visible)</option>
+            <option value="inactive">Inactive Only (Hidden)</option>
             <option value="verified">Verified Only</option>
             <option value="pending">Unverified</option>
             <option value="featured">Featured Homes</option>
@@ -370,7 +418,18 @@ function AdminPropertiesContent() {
           ) : (
             displayedProperties.map((item: any) => {
               const targetId = item.pid || item._id || item.id;
-              const mainImg = item.images && item.images.length > 0 ? item.images[0] : null;
+              const getVideoPoster = (url?: string) => {
+                if (!url) return null;
+                if (url.includes('res.cloudinary.com')) {
+                  return url.replace(/\.(mp4|mov|webm|mkv|avi|m4v)(\?.*)?$/i, '.jpg').replace('/video/upload/', '/video/upload/so_0,q_auto,f_auto/');
+                }
+                const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|shorts\/))([a-zA-Z0-9_-]{11})/);
+                if (ytMatch && ytMatch[1]) {
+                  return `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+                }
+                return null;
+              };
+              const mainImg = (item.images && item.images.length > 0 ? item.images[0] : null) || item.videoThumbnail || (item.videos && item.videos[0] ? getVideoPoster(item.videos[0]) : null);
 
               return (
                 <div
@@ -389,6 +448,16 @@ function AdminPropertiesContent() {
                     </div>
 
                     <div className="flex items-center space-x-1 flex-wrap">
+                      {item.available === false ? (
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-400 border border-zinc-700 text-[9px] font-bold whitespace-nowrap shadow-sm">
+                          <span>INACTIVE</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-950/90 text-emerald-400 border border-emerald-800 text-[9px] font-bold whitespace-nowrap shadow-sm">
+                          <span>ACTIVE</span>
+                        </span>
+                      )}
+
                       {item.verified ? (
                         <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-950/90 text-emerald-400 border border-emerald-800 text-[9px] font-extrabold whitespace-nowrap shadow-sm">
                           <CheckCircle2 size={10} />
@@ -447,6 +516,12 @@ function AdminPropertiesContent() {
 
                       {/* Specs badges */}
                       <div className="flex items-center gap-1 flex-wrap pt-0.5">
+                        {item.videos && item.videos.length > 0 && (
+                          <span className="text-[8px] font-extrabold bg-emerald-950/80 text-emerald-400 border border-emerald-800/80 px-1.5 py-0.2 rounded flex items-center space-x-0.5">
+                            <Video size={9} />
+                            <span>Video Tour</span>
+                          </span>
+                        )}
                         {item.bedrooms && (
                           <span className="text-[8px] font-bold bg-[#050806] text-gray-300 border border-emerald-950 px-1 py-0.2 rounded">
                             {item.bedrooms} BHK
@@ -469,17 +544,46 @@ function AdminPropertiesContent() {
                   {/* Owner Contact Bar */}
                   <div className="flex items-center justify-around py-1.5 px-2.5 rounded-lg bg-[#040805] border border-emerald-950/80 text-[10px]">
                     <span className="text-gray-400 text-[10px]">Owner:</span>
-                    <a
-                      href={`tel:${item.ownerPhone || '+919876543210'}`}
-                      className="font-mono font-bold text-emerald-400 flex items-center space-x-1 hover:underline whitespace-nowrap text-[11px]"
-                    >
-                      <Phone size={10} className="stroke-[2.5]" />
-                      <span>{item.ownerPhone || '+91 98765 43210'}</span>
-                    </a>
+                    {item.ownerPhone ? (
+                      <a
+                        href={`tel:${item.ownerPhone}`}
+                        className="font-mono font-bold text-emerald-400 flex items-center space-x-1 hover:underline whitespace-nowrap text-[11px]"
+                      >
+                        <Phone size={10} className="stroke-[2.5]" />
+                        <span>{item.ownerPhone}</span>
+                      </a>
+                    ) : (
+                      <span className="font-mono text-gray-400 text-[11px]">N/A</span>
+                    )}
                   </div>
 
                   {/* Moderation Actions Toolbar */}
                   <div className="flex items-center gap-1.5 pt-0.5">
+                    {/* Active / Inactive Sliding Toggle Switch */}
+                    <button
+                      disabled={Boolean(actionPendingId)}
+                      onClick={() => handleActiveToggle(targetId, item.available !== false)}
+                      className={`h-7 px-2 flex items-center space-x-1.5 rounded-lg border transition-all cursor-pointer disabled:opacity-50 shrink-0 ${
+                        item.available !== false
+                          ? 'bg-[#06180f] border-emerald-800/80 text-emerald-300 hover:bg-emerald-950'
+                          : 'bg-[#0e0e0e] border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                      }`}
+                      title={item.available !== false ? 'Click to make Inactive (Hide from listings)' : 'Click to make Active (Show in listings)'}
+                    >
+                      <div
+                        className={`w-6 h-3.5 rounded-full transition-colors relative flex items-center p-0.5 ${
+                          item.available !== false ? 'bg-emerald-500' : 'bg-zinc-600'
+                        }`}
+                      >
+                        <div
+                          className={`w-2.5 h-2.5 rounded-full bg-white shadow transform transition-transform duration-200 ${
+                            item.available !== false ? 'translate-x-2.5' : 'translate-x-0'
+                          }`}
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold">{item.available !== false ? 'Active' : 'Inactive'}</span>
+                    </button>
+
                     {/* Verify / Unverify Button */}
                     <button
                       disabled={Boolean(actionPendingId)}
@@ -568,17 +672,45 @@ function AdminPropertiesContent() {
                 displayedProperties.map((item: any) => {
                   const targetId = item.pid || item._id || item.id;
                   return (
-                    <tr key={targetId} className="hover:bg-[#07120a] transition-colors">
-                      <td className="p-3.5 font-mono font-bold text-emerald-400 whitespace-nowrap">{item.pid}</td>
+                    <tr
+                      key={targetId}
+                      onClick={() => window.open(`/properties/${targetId}`, '_blank')}
+                      className="hover:bg-[#07160d] transition-colors cursor-pointer group"
+                      title="Click to view full property listing"
+                    >
+                      <td className="p-3.5 font-mono font-bold text-emerald-400 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 group-hover:underline">
+                          {item.pid}
+                          <ExternalLink size={10} className="text-emerald-400/60 group-hover:text-emerald-400 transition-colors" />
+                        </span>
+                      </td>
                       <td className="p-3.5 max-w-xs">
-                        <div className="font-bold text-white truncate">{item.title}</div>
+                        <div className="flex items-center space-x-1.5">
+                          <div className="font-bold text-white truncate group-hover:text-emerald-300 transition-colors">{item.title}</div>
+                          {item.videos && item.videos.length > 0 && (
+                            <span className="px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[8px] font-extrabold flex items-center space-x-0.5 shrink-0" title="Walkthrough Video Tour Available">
+                              <Video size={8} />
+                              <span>Tour</span>
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[10px] text-gray-400 truncate">{item.locality}, {item.city}</div>
                       </td>
                       <td className="p-3.5 capitalize font-semibold whitespace-nowrap">{item.category} ({item.type})</td>
                       <td className="p-3.5 font-bold text-emerald-400 whitespace-nowrap">₹{item.price?.toLocaleString('en-IN')}</td>
-                      <td className="p-3.5 font-mono text-gray-300 whitespace-nowrap">{item.ownerPhone || '+91 98765 43210'}</td>
+                      <td className="p-3.5 font-mono text-gray-300 whitespace-nowrap">{item.ownerPhone || 'N/A'}</td>
                       <td className="p-3.5 whitespace-nowrap">
                         <div className="flex flex-col space-y-1">
+                          {item.available === false ? (
+                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-400 border border-zinc-700 text-[9px] font-bold w-fit whitespace-nowrap">
+                              <span>INACTIVE</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[9px] font-bold w-fit whitespace-nowrap">
+                              <span>ACTIVE</span>
+                            </span>
+                          )}
+
                           {item.verified ? (
                             <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[9px] font-extrabold w-fit whitespace-nowrap">
                               <CheckCircle2 size={11} />
@@ -599,8 +731,36 @@ function AdminPropertiesContent() {
                           )}
                         </div>
                       </td>
-                      <td className="p-3.5 text-right whitespace-nowrap">
+                      <td className="p-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="inline-flex items-center justify-end space-x-1.5">
+                          {/* Active / Inactive Sliding Toggle Switch */}
+                          <button
+                            disabled={Boolean(actionPendingId)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleActiveToggle(targetId, item.available !== false);
+                            }}
+                            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed flex items-center space-x-2 shadow-sm select-none ${
+                              item.available !== false
+                                ? 'bg-[#06180f] border-emerald-800/80 text-emerald-300 hover:bg-emerald-950'
+                                : 'bg-[#0e0e0e] border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                            }`}
+                            title={item.available !== false ? 'Click to make Inactive (Hide from listings)' : 'Click to make Active (Show in listings)'}
+                          >
+                            <div
+                              className={`w-7 h-4 rounded-full transition-colors relative flex items-center p-0.5 ${
+                                item.available !== false ? 'bg-emerald-500' : 'bg-zinc-600'
+                              }`}
+                            >
+                              <div
+                                className={`w-3 h-3 rounded-full bg-white shadow transform transition-transform duration-200 ${
+                                  item.available !== false ? 'translate-x-3' : 'translate-x-0'
+                                }`}
+                              />
+                            </div>
+                            <span>{item.available !== false ? 'Active' : 'Inactive'}</span>
+                          </button>
+
                           {/* Verify / Unverify Button */}
                           <button
                             disabled={Boolean(actionPendingId)}
@@ -785,11 +945,38 @@ function AdminPropertiesContent() {
                     onChange={(e) => setEditingProperty({ ...editingProperty, bedrooms: Number(e.target.value) })}
                     className="w-full px-3 py-2 bg-[#050806] border border-emerald-900 rounded-xl text-white font-semibold focus:outline-none focus:border-emerald-500"
                   >
+                    <option value={0.5}>1 RK</option>
                     <option value={1}>1 BHK</option>
                     <option value={2}>2 BHK</option>
                     <option value={3}>3 BHK</option>
                     <option value={4}>4 BHK</option>
                     <option value={5}>4+ BHK / Villa</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-gray-400 font-semibold mb-1">Listing Status</label>
+                  <select
+                    value={editingProperty.available !== false ? 'true' : 'false'}
+                    onChange={(e) => setEditingProperty({ ...editingProperty, available: e.target.value === 'true' })}
+                    className="w-full px-3 py-2 bg-[#050806] border border-emerald-900 rounded-xl text-white font-semibold focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="true">● Active (Visible in listings)</option>
+                    <option value="false">○ Inactive (Hidden from public)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-gray-400 font-semibold mb-1">Verification</label>
+                  <select
+                    value={editingProperty.verified ? 'true' : 'false'}
+                    onChange={(e) => setEditingProperty({ ...editingProperty, verified: e.target.value === 'true' })}
+                    className="w-full px-3 py-2 bg-[#050806] border border-emerald-900 rounded-xl text-white font-semibold focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="true">Verified & Live</option>
+                    <option value="false">Unverified (Pending Review)</option>
                   </select>
                 </div>
               </div>

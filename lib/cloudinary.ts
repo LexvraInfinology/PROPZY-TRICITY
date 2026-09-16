@@ -34,11 +34,33 @@ export function extractPublicIdFromUrl(url: string): string | null {
   }
 
   try {
-    // Matches path after /upload/ (skipping version like /v12345/ if present, and transformations)
-    const matches = url.match(/\/upload\/(?:[^\/]+\/)*(?:v\d+\/)?([^\.]+)/);
-    if (matches && matches[1]) {
-      return matches[1];
+    const uploadIndex = url.indexOf('/upload/');
+    if (uploadIndex === -1) return null;
+
+    const afterUpload = url.substring(uploadIndex + '/upload/'.length);
+    const cleanPath = afterUpload.split('?')[0].split('#')[0];
+    const segments = cleanPath.split('/');
+
+    let startIndex = 0;
+    for (let i = 0; i < segments.length; i++) {
+      const seg = segments[i];
+      if (/^v\d+$/.test(seg)) {
+        startIndex = i + 1;
+        break;
+      }
+      if (/^[a-z]{1,2}_|,/.test(seg)) {
+        startIndex = i + 1;
+      } else {
+        break;
+      }
     }
+
+    const publicPathWithExt = segments.slice(startIndex).join('/');
+    const lastDotIndex = publicPathWithExt.lastIndexOf('.');
+    if (lastDotIndex !== -1) {
+      return publicPathWithExt.substring(0, lastDotIndex);
+    }
+    return publicPathWithExt || null;
   } catch (err) {
     console.warn('Failed to extract public_id from Cloudinary URL:', url, err);
   }
@@ -99,6 +121,52 @@ export async function deleteCloudinaryImage(publicId: string) {
     console.warn(`[Cloudinary] Failed to delete image ${publicId}:`, error.message);
     return null;
   }
+}
+
+/**
+ * Safely destroys a video on Cloudinary by its publicId.
+ */
+export async function deleteCloudinaryVideo(publicId: string) {
+  if (!publicId) return null;
+  try {
+    const result = await cloudinary.uploader.destroy(publicId, {
+      resource_type: 'video',
+      invalidate: true,
+    });
+    return result;
+  } catch (error: any) {
+    console.warn(`[Cloudinary] Failed to delete video ${publicId}:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Returns an optimized poster/thumbnail URL for a video.
+ * Supports Cloudinary video URLs, YouTube, and fallback placeholders.
+ */
+export function getVideoThumbnailUrl(videoUrl: string): string {
+  if (!videoUrl || typeof videoUrl !== 'string') return '';
+
+  const cleanUrl = videoUrl.trim();
+
+  // Cloudinary video URL: transform extension to .jpg with start-offset 0
+  if (cleanUrl.includes('res.cloudinary.com')) {
+    // If it's already an image URL, return as is
+    if (/\.(jpg|jpeg|png|webp)(\?.*)?$/i.test(cleanUrl)) return cleanUrl;
+
+    // Replace video extension with .jpg and add auto quality/first frame transformation if not present
+    return cleanUrl
+      .replace(/\.(mp4|mov|webm|mkv|avi|m4v)(\?.*)?$/i, '.jpg')
+      .replace('/video/upload/', '/video/upload/so_0,q_auto,f_auto/');
+  }
+
+  // YouTube standard / shorts / embed URLs
+  const ytMatch = cleanUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|shorts\/))([a-zA-Z0-9_-]{11})/);
+  if (ytMatch && ytMatch[1]) {
+    return `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+  }
+
+  return '';
 }
 
 export default cloudinary;

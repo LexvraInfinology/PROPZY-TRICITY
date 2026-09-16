@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Heart, ShieldCheck, MapPin, Bed, Bath, Maximize, PhoneCall, ChevronLeft, ChevronRight, UserCheck, Building2 } from 'lucide-react';
+import { Heart, ShieldCheck, MapPin, Bed, Bath, Maximize, PhoneCall, ChevronLeft, ChevronRight, UserCheck, Building2, Video, Play } from 'lucide-react';
 import { PropertyItem } from '@/lib/seedData';
 import { useApp } from '@/context/AppContext';
 
@@ -26,54 +26,155 @@ export const PropertyCard: React.FC<PropertyCardProps> = React.memo(({ property,
 
   const wish = mounted ? (isWishlisted(property.pid) || (property.id ? isWishlisted(property.id) : false)) : false;
 
-  const images = property.images && property.images.length > 0
+  const rawVideos = property.videos && property.videos.length > 0
+    ? property.videos
+    : property.video ? [property.video] : [];
+  const rawImages = property.images && property.images.length > 0
     ? property.images
-    : ['https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=800&q=80'];
+    : [];
+
+  const getVideoPoster = (url: string) => {
+    if (!url) return '';
+    if (url.includes('res.cloudinary.com')) {
+      return url.replace(/\.(mp4|mov|webm|mkv|avi|m4v)(\?.*)?$/i, '.jpg').replace('/video/upload/', '/video/upload/so_0,q_auto,f_auto/');
+    }
+    const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|shorts\/))([a-zA-Z0-9_-]{11})/);
+    if (ytMatch && ytMatch[1]) {
+      return `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+    }
+    return '';
+  };
+
+  const videoPoster = rawVideos.length > 0
+    ? (property.videoThumbnail || getVideoPoster(rawVideos[0]))
+    : '';
+
+  const mediaList: { url: string; isVideo: boolean }[] = [
+    ...(rawVideos.length > 0 ? [{ url: videoPoster, isVideo: true }] : []),
+    ...rawImages.map(img => ({ url: img, isVideo: false }))
+  ];
+
+  const images = mediaList;
 
   const nextImg = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setCurrentImgIndex((prev) => (prev + 1) % images.length);
+    if (images.length > 1) {
+      setCurrentImgIndex((prev) => (prev + 1) % images.length);
+    }
   };
 
   const prevImg = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setCurrentImgIndex((prev) => (prev - 1 + images.length) % images.length);
+    if (images.length > 1) {
+      setCurrentImgIndex((prev) => (prev - 1 + images.length) % images.length);
+    }
   };
 
-  const formatPrice = (val: number) => {
-    if (val >= 10000000) return `₹${(val / 10000000).toFixed(2)} Cr`;
-    if (val >= 100000) return `₹${(val / 100000).toFixed(2)} Lakh`;
-    return `₹${val.toLocaleString('en-IN')}`;
+  const formatPrice = (val: number | string | any) => {
+    if (val === undefined || val === null || val === '') return '₹0';
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (trimmed.includes('-')) {
+        const parts = trimmed.split('-').map(p => p.trim().replace(/[^0-9.]/g, ''));
+        if (parts.length === 2 && parts[0] && parts[1]) {
+          const p1 = Number(parts[0]);
+          const p2 = Number(parts[1]);
+          if (!isNaN(p1) && !isNaN(p2)) {
+            return `₹${p1.toLocaleString('en-IN')} - ₹${p2.toLocaleString('en-IN')}`;
+          }
+        }
+        return trimmed.startsWith('₹') ? trimmed : `₹${trimmed}`;
+      }
+      const num = Number(trimmed.replace(/,/g, ''));
+      if (!isNaN(num) && num > 0) {
+        val = num;
+      } else {
+        return trimmed.startsWith('₹') ? trimmed : `₹${trimmed}`;
+      }
+    }
+    const numVal = Number(val);
+    if (numVal >= 10000000) return `₹${(numVal / 10000000).toFixed(2)} Cr`;
+    if (numVal >= 100000) return `₹${(numVal / 100000).toFixed(2)} Lakh`;
+    return `₹${numVal.toLocaleString('en-IN')}`;
   };
 
   const propertyUrl = `/properties/${property.pid || property.id}`;
 
+  const saveScrollState = () => {
+    if (typeof window !== 'undefined') {
+      const currentPath = window.location.pathname;
+      const pid = property.pid || property.id;
+      if (currentPath === '/') {
+        sessionStorage.setItem('home_scroll_y', String(window.scrollY));
+        if (pid) sessionStorage.setItem('home_scroll_pid', String(pid));
+      } else if (currentPath.startsWith('/properties')) {
+        sessionStorage.setItem('properties_scroll_y', String(window.scrollY));
+        if (pid) sessionStorage.setItem('properties_scroll_pid', String(pid));
+      }
+    }
+  };
+
   return (
     <Link
+      id={`prop-card-${property.pid || property.id}`}
       href={propertyUrl}
-      onClick={() => {
-        if (typeof window !== 'undefined' && window.location.pathname === '/') {
-          sessionStorage.setItem('home_scroll_target', 'handpicked-properties');
-          sessionStorage.setItem('home_scroll_y', String(window.scrollY));
-        }
-      }}
+      onClick={saveScrollState}
       className="group bg-[#0a110d] rounded-3xl border border-emerald-950/90 hover:border-emerald-800/60 shadow-xl hover:shadow-emerald-950/40 transition-all duration-300 overflow-hidden flex flex-col h-full cursor-pointer"
     >
       {/* Photo Container */}
-      <div className="relative aspect-4/3 overflow-hidden bg-[#050806]">
-        <LazyImage
-          src={images[currentImgIndex]}
-          alt={property.title}
-          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-        />
+      <div className="relative aspect-4/3 overflow-hidden bg-[#050806] flex items-center justify-center">
+        {images.length > 0 ? (
+          images[currentImgIndex]?.url ? (
+            <LazyImage
+              src={images[currentImgIndex].url}
+              alt={property.title}
+              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+            />
+          ) : images[currentImgIndex]?.isVideo ? (
+            <div className="w-full h-full bg-gradient-to-br from-[#06140c] via-[#091e13] to-[#040c07] flex flex-col items-center justify-center text-emerald-400">
+              <div className="w-12 h-12 rounded-full bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
+                <Play size={20} className="fill-current ml-0.5" />
+              </div>
+              <span className="text-[11px] font-extrabold text-emerald-300 mt-2 tracking-wide uppercase">Watch Video Tour</span>
+            </div>
+          ) : (
+            <div className="w-full h-full flex flex-col items-center justify-center bg-[#07110a] text-gray-400 p-4 text-center">
+              <Building2 size={32} className="text-emerald-500/50 mb-1" />
+              <span className="text-xs font-bold text-gray-300">No Photo</span>
+            </div>
+          )
+        ) : (
+          <div className="w-full h-full flex flex-col items-center justify-center bg-[#07110a] text-gray-400 p-4 text-center">
+            <Building2 size={36} className="text-emerald-500/40 mb-1.5" />
+            <span className="text-xs font-bold text-gray-300">No Photos Uploaded</span>
+            <span className="text-[10px] text-gray-500">Owner has not added media</span>
+          </div>
+        )}
+
+        {/* Video Play Overlay Indicator if current slide is video with poster */}
+        {images.length > 0 && images[currentImgIndex]?.isVideo && images[currentImgIndex]?.url && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/20 group-hover:bg-black/10 transition-colors">
+            <div className="w-11 h-11 rounded-full bg-emerald-500 text-black flex items-center justify-center shadow-xl shadow-emerald-500/40 group-hover:scale-110 transition-transform">
+              <Play size={18} className="fill-current ml-0.5" />
+            </div>
+          </div>
+        )}
 
         {/* Verified Badge */}
         {property.verified && (
           <div className="absolute top-3 left-3 bg-emerald-500 text-black text-[11px] font-extrabold px-3 py-1 rounded-full flex items-center space-x-1 shadow-md z-10">
             <ShieldCheck size={13} className="stroke-[2.5]" />
             <span>Verified</span>
+          </div>
+        )}
+
+        {/* Video Tour Badge */}
+        {property.videos && property.videos.length > 0 && (
+          <div className={`absolute ${property.verified ? 'top-10' : 'top-3'} left-3 bg-black/85 backdrop-blur-md text-emerald-400 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center space-x-1 shadow-md border border-emerald-500/50 z-10`}>
+            <Video size={11} className="stroke-[2.5] text-emerald-400" />
+            <span>Video Tour</span>
           </div>
         )}
 
@@ -154,7 +255,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = React.memo(({ property,
               property.bedrooms !== undefined && property.bedrooms > 0 && (
                 <div className="flex items-center space-x-1.5">
                   <Bed size={14} className="text-emerald-500" />
-                  <span>{property.bedrooms} Bed</span>
+                  <span>{property.bedrooms === 0.5 ? '1 RK' : `${property.bedrooms} Bed`}</span>
                 </div>
               )
             )}
@@ -164,7 +265,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = React.memo(({ property,
                 <span>{property.bathrooms} {(property.category === 'commercial' || property.type === 'commercial') ? 'Washroom' : 'Bath'}</span>
               </div>
             )}
-            {property.areaSqFt !== undefined && property.areaSqFt <= 99999 && (
+            {Boolean(property.areaSqFt && property.areaSqFt > 0 && property.areaSqFt <= 99999) && (
               <div className="flex items-center space-x-1.5">
                 <Maximize size={14} className="text-emerald-500" />
                 <span>{property.areaSqFt} sq.ft</span>
@@ -207,9 +308,33 @@ export const PropertyCard: React.FC<PropertyCardProps> = React.memo(({ property,
                 console.warn('Inquiry submission error:', err);
               }
 
+              if (user.role === 'owner') {
+                showToast('Inquiry submitted to the owner!');
+                saveScrollState();
+                router.push(`/properties/${property.id || property.pid}`);
+                return;
+              }
+
+              const userCredits = typeof user.credits === 'number' ? user.credits : 0;
+              const isUnlocked = Boolean(
+                property.ownerPhone ||
+                user.role === 'admin' ||
+                (user.unlockedProperties && (
+                  user.unlockedProperties.includes(property.pid) ||
+                  user.unlockedProperties.includes(property.id)
+                ))
+              );
+
+              if (isUnlocked || userCredits > 0) {
+                saveScrollState();
+                router.push(`/properties/${property.id || property.pid}`);
+                return;
+              }
+
               if (typeof window !== 'undefined') {
                 window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
               }
+              showToast('Please purchase a plan to unlock owner contacts.', 'error');
               router.push('/plans');
             }}
             className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-[11px] shadow-md shadow-emerald-500/20 transition-all cursor-pointer active:scale-95 z-20"

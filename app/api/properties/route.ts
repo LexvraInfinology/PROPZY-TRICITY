@@ -5,19 +5,34 @@ import User from '@/models/User';
 import { PropertyItem } from '@/lib/seedData';
 import { getAuthUser } from '@/lib/auth';
 import { canViewPropertyContactDetails, isAdminUser, isBrowserDocumentNavigation, normalizeEmail, serializeProperty } from '@/lib/accessControl';
-import { 
-  getPropertiesCache, 
+import {
+  getPropertiesCache,
   getStalePropertiesCache,
-  setPropertiesCache, 
-  clearPropertiesCache, 
-  getInFlight, 
-  setInFlight, 
-  deleteInFlight, 
-  buildPropertyCacheKey 
+  setPropertiesCache,
+  clearPropertiesCache,
+  getInFlight,
+  setInFlight,
+  deleteInFlight,
+  buildPropertyCacheKey
 } from '@/lib/propertiesCache';
-import { uploadBase64ImagesToCloudinary } from '@/lib/cloudinary';
+import { uploadBase64ImagesToCloudinary, getVideoThumbnailUrl } from '@/lib/cloudinary';
 
 export const runtime = 'nodejs';
+
+function escapeRegex(str: string): string {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function parsePriceOrDeposit(val: any, fallback: number = 0): number | string {
+  if (val === undefined || val === null || val === '') return fallback;
+  const str = String(val).trim();
+  if (str.includes('-')) {
+    return str;
+  }
+  const cleanStr = str.replace(/,/g, '').trim();
+  const num = Number(cleanStr);
+  return isNaN(num) ? (str || fallback) : num;
+}
 
 export async function GET(req: NextRequest) {
   const tStart = performance.now();
@@ -95,6 +110,8 @@ export async function GET(req: NextRequest) {
     const bedrooms = searchParams.get('bedrooms');
     const search = searchParams.get('search');
     const verified = searchParams.get('verified');
+    const available = searchParams.get('available');
+    const active = searchParams.get('active');
     const admin = searchParams.get('admin');
     const isAdminView = admin === 'true' || isAdminUser(authUser);
     const page = Math.max(1, Number(searchParams.get('page')) || 1);
@@ -135,8 +152,8 @@ export async function GET(req: NextRequest) {
           filter.category = category;
         }
       }
-      if (city && city !== 'all') filter.city = new RegExp(city, 'i');
-      if (locality) filter.locality = new RegExp(locality, 'i');
+      if (city && city !== 'all') filter.city = new RegExp(escapeRegex(city), 'i');
+      if (locality) filter.locality = new RegExp(escapeRegex(locality), 'i');
       if (type && type !== 'all') filter.type = type;
       if (pid) filter.pid = pid.trim().toUpperCase();
       if (bedrooms && bedrooms !== 'all') {
@@ -157,12 +174,13 @@ export async function GET(req: NextRequest) {
       if (maxPrice) filter.price = { $lte: Number(maxPrice) };
 
       if (search) {
+        const safeSearch = escapeRegex(search);
         const searchOr = [
-          { title: new RegExp(search, 'i') },
-          { locality: new RegExp(search, 'i') },
-          { city: new RegExp(search, 'i') },
-          { address: new RegExp(search, 'i') },
-          { pid: new RegExp(search, 'i') }
+          { title: new RegExp(safeSearch, 'i') },
+          { locality: new RegExp(safeSearch, 'i') },
+          { city: new RegExp(safeSearch, 'i') },
+          { address: new RegExp(safeSearch, 'i') },
+          { pid: new RegExp(safeSearch, 'i') }
         ];
         if (filter.$or) {
           filter.$and = filter.$and || [];
@@ -175,9 +193,17 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      // Verified status filtering & visibility access control
+      // Active / Inactive & Verified status filtering & visibility access control
+      const activeFilterValue = active !== null ? active : available;
+
       if (isAdminView) {
-        // Admin Portal: sees ALL listings (verified & pending review) by default unless explicitly filtering
+        // Admin Portal: sees ALL listings (active/inactive & verified/pending) by default unless explicitly filtering
+        if (activeFilterValue === 'true') {
+          filter.available = { $ne: false };
+        } else if (activeFilterValue === 'false') {
+          filter.available = false;
+        }
+
         if (verified === 'true') {
           filter.verified = true;
         } else if (verified === 'false') {
@@ -188,7 +214,7 @@ export async function GET(req: NextRequest) {
         // Used by Dashboard "My Properties" tab for logged-in owners
         if (authUser?.email) {
           const userVisibilityOr = [
-            { verified: true },
+            { verified: true, available: { $ne: false } },
             { ownerEmail: authUser.email.toLowerCase().trim() }
           ];
 
@@ -202,8 +228,9 @@ export async function GET(req: NextRequest) {
             filter.$or = userVisibilityOr;
           }
         } else {
-          // Unauthenticated users never see unverified listings
+          // Unauthenticated users never see unverified or inactive listings
           filter.verified = true;
+          filter.available = { $ne: false };
         }
       } else if (verified === 'false') {
         // Explicitly requested unverified listings only (e.g. Owner pending tab)
@@ -217,20 +244,21 @@ export async function GET(req: NextRequest) {
         }
       } else {
         // Standard public browsing (/properties, homepage, search, or verified='true'):
-        // STRICTLY VERIFIED PROPERTIES ONLY
+        // STRICTLY VERIFIED AND ACTIVE PROPERTIES ONLY (INACTIVE ARE HIDDEN)
         filter.verified = true;
+        filter.available = { $ne: false };
       }
 
       const skip = (page - 1) * limit;
       const fetchLimit = includeTotal ? limit : limit + 1;
 
       // 2. Projected lightweight listing fields
-      const projection = 'pid title category type city locality address price deposit bedrooms bathrooms areaSqFt furnishing verified featured images ownerEmail ownerRole available createdAt';
+      const projection = 'pid title category type city locality address price deposit bedrooms bathrooms areaSqFt furnishing verified featured images videos videoThumbnail ownerEmail ownerRole available createdAt';
 
       const tQueryStart = performance.now();
       console.log('[API Properties] Filter:', JSON.stringify(filter), 'Limit:', fetchLimit);
       console.log('[API Properties] Querying MongoDB...');
-      
+
       let properties: any[] = [];
       let totalCount: number | undefined;
 
@@ -361,26 +389,8 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    let authUser = await getAuthUser(req);
+    const authUser = await getAuthUser(req);
     const body = await req.json().catch(() => ({}));
-
-    // Fallback: If session cookie was not attached by browser, verify user identity via MongoDB Atlas
-    if (!authUser && body?.ownerEmail) {
-      try {
-        await connectToDatabase();
-        const fallbackDbUser = await User.findOne({ email: String(body.ownerEmail).toLowerCase().trim() }).lean();
-        if (fallbackDbUser) {
-          authUser = {
-            id: (fallbackDbUser as any)._id.toString(),
-            name: (fallbackDbUser as any).name,
-            email: (fallbackDbUser as any).email,
-            role: (fallbackDbUser as any).role || 'owner'
-          };
-        }
-      } catch (dbAuthErr) {
-        console.warn('[POST properties] DB user auth fallback warning:', dbAuthErr);
-      }
-    }
 
     if (!authUser) {
       return NextResponse.json({ success: false, message: 'Unauthorized. Please login.' }, { status: 401 });
@@ -405,10 +415,10 @@ export async function POST(req: NextRequest) {
     }
 
     if (authUser.role !== 'admin') {
-      const isApprovedOwner = 
-        authUser.role === 'owner' || 
-        existingUser?.role === 'owner' || 
-        existingUser?.ownerVerified === true || 
+      const isApprovedOwner =
+        authUser.role === 'owner' ||
+        existingUser?.role === 'owner' ||
+        existingUser?.ownerVerified === true ||
         existingUser?.verificationStatus === 'approved';
 
       if (!isApprovedOwner) {
@@ -419,24 +429,32 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const cleanedImages = Array.isArray(body.images) 
+    const cleanedImages = Array.isArray(body.images)
       ? body.images.filter((img: string) => typeof img === 'string' && img.trim().length > 0)
       : [];
 
-    if (cleanedImages.length === 0) {
-      return NextResponse.json({
-        success: false,
-        message: 'At least one property photo is required. Please upload photos before posting.'
-      }, { status: 400 });
-    }
-
     // Generate guaranteed unique PID to prevent MongoDB unique index collisions
     const pidGenerated = body.pid || `PZ-${Date.now().toString().slice(-4)}${Math.floor(10 + Math.random() * 90)}`;
-    const resolvedOwnerName = existingUser?.name || authUser.name || body.ownerName || 'Property Owner';
-    const resolvedOwnerPhone = existingUser?.phone || body.ownerPhone || '+91 98765 43210';
+    const resolvedOwnerName = (body.ownerName && typeof body.ownerName === 'string' && body.ownerName.trim()) 
+      ? body.ownerName.trim() 
+      : (existingUser?.name || authUser.name || 'Property Owner');
+
+    const resolvedOwnerPhone = (body.ownerPhone && typeof body.ownerPhone === 'string' && body.ownerPhone.trim()) 
+      ? body.ownerPhone.trim() 
+      : (existingUser?.phone?.trim() || authUser.phone?.trim() || '');
     const resolvedOwnerEmail = cleanAuthEmail;
 
-    const uploadedImages = await uploadBase64ImagesToCloudinary(cleanedImages);
+    const uploadedImages = cleanedImages.length > 0
+      ? await uploadBase64ImagesToCloudinary(cleanedImages)
+      : [];
+
+    const cleanedVideos = Array.isArray(body.videos)
+      ? body.videos.filter((v: string) => typeof v === 'string' && v.trim().length > 0)
+      : (typeof body.video === 'string' && body.video.trim().length > 0) ? [body.video.trim()] : [];
+
+    const resolvedVideoThumbnail = typeof body.videoThumbnail === 'string' && body.videoThumbnail.trim().length > 0
+      ? body.videoThumbnail.trim()
+      : (cleanedVideos.length > 0 ? getVideoThumbnailUrl(cleanedVideos[0]) : '');
 
     const newProperty = {
       pid: pidGenerated,
@@ -446,17 +464,19 @@ export async function POST(req: NextRequest) {
       city: body.city || 'Mohali',
       locality: body.locality || 'Sector 70',
       address: body.address || `${body.locality || 'Sector 70'}, ${body.city || 'Mohali'}`,
-      price: Number(body.price) || 10000,
-      deposit: Number(body.deposit) || 0,
+      price: parsePriceOrDeposit(body.price, 10000),
+      deposit: parsePriceOrDeposit(body.deposit, 0),
       bedrooms: body.bedrooms !== undefined && !isNaN(Number(body.bedrooms)) ? Number(body.bedrooms) : (body.category === 'commercial' || body.type === 'commercial' ? 0 : 1),
       bathrooms: body.bathrooms !== undefined && !isNaN(Number(body.bathrooms)) ? Number(body.bathrooms) : 1,
-      areaSqFt: Number(body.areaSqFt) || 500,
+      areaSqFt: body.areaSqFt && Number(body.areaSqFt) > 0 ? Number(body.areaSqFt) : null,
       furnishing: validFurnishing.includes(body.furnishing) ? body.furnishing : 'semi-furnished',
-      verified: body.verified !== undefined ? body.verified : false,
-      featured: body.featured !== undefined ? body.featured : false,
+      verified: isAdminUser(authUser) ? (body.verified !== undefined ? Boolean(body.verified) : false) : false,
+      featured: isAdminUser(authUser) ? (body.featured !== undefined ? Boolean(body.featured) : false) : false,
       images: uploadedImages,
+      videos: cleanedVideos,
+      videoThumbnail: resolvedVideoThumbnail,
       description: body.description || `Property listing in ${body.locality || 'Mohali'}.`,
-      amenities: Array.isArray(body.amenities) ? body.amenities : ['Power Backup', 'Car Parking'],
+      amenities: Array.isArray(body.amenities) ? body.amenities : ['Inverter', 'Cooler'],
       ownerName: resolvedOwnerName,
       ownerPhone: resolvedOwnerPhone,
       ownerEmail: resolvedOwnerEmail,
@@ -482,21 +502,21 @@ export async function POST(req: NextRequest) {
     }
 
     if (created) {
-      return NextResponse.json({ 
-        success: true, 
-        data: created, 
-        message: 'Property posted successfully to MongoDB Atlas!' 
+      return NextResponse.json({
+        success: true,
+        data: created,
+        message: 'Property posted successfully to MongoDB Atlas!'
       });
     }
 
-    return NextResponse.json({ 
-      success: false, 
-      message: 'Failed to create property in database. Please check connection and try again.' 
+    return NextResponse.json({
+      success: false,
+      message: 'Failed to create property in database. Please check connection and try again.'
     }, { status: 500 });
   } catch (error: any) {
-    return NextResponse.json({ 
-      success: false, 
-      message: error.message || 'Failed to create property' 
+    return NextResponse.json({
+      success: false,
+      message: error.message || 'Failed to create property'
     }, { status: 400 });
   }
 }

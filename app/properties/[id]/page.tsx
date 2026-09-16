@@ -5,7 +5,8 @@ import { useParams, useRouter, notFound } from 'next/navigation';
 import Link from 'next/link';
 import {
   ShieldCheck, MapPin, Bed, Bath, Maximize, Heart, PhoneCall,
-  ChevronLeft, ChevronRight, Check, User, Copy, Grid, X, Camera, Image as ImageIcon, Building2, Sparkles
+  ChevronLeft, ChevronRight, Check, User, Copy, Grid, X, Camera, Image as ImageIcon, Building2, Sparkles, Video, Play, Edit3,
+  Clock, CheckCircle2, XCircle
 } from 'lucide-react';
 import { PropertyItem } from '@/lib/seedData';
 import { useApp } from '@/context/AppContext';
@@ -19,20 +20,22 @@ export default function PropertyDetailPage() {
   const router = useRouter();
   const id = params?.id as string;
 
-  const { user, openAuthModal, toggleWishlist, isWishlisted, showToast } = useApp();
+  const { user, setUser, openAuthModal, toggleWishlist, isWishlisted, showToast } = useApp();
   const [property, setProperty] = useState<PropertyItem | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [similarProperties, setSimilarProperties] = useState<PropertyItem[]>([]);
+  const [loadingSimilar, setLoadingSimilar] = useState<boolean>(false);
+  const [unlockedPhone, setUnlockedPhone] = useState<string | null>(null);
+  const [unlockedName, setUnlockedName] = useState<string | null>(null);
+  const [unlocking, setUnlocking] = useState<boolean>(false);
   const [currentImgIndex, setCurrentImgIndex] = useState(0);
   const [showInquiryModal, setShowInquiryModal] = useState(false);
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
   const [isSwiping, setIsSwiping] = useState(false);
-
-  // Recommendations / Similar Properties State & Scroller Ref
-  const [similarProperties, setSimilarProperties] = useState<PropertyItem[]>([]);
-  const [loadingSimilar, setLoadingSimilar] = useState(false);
   const [totalSimilarCount, setTotalSimilarCount] = useState(0);
+  const [verifying, setVerifying] = useState(false);
   const similarSliderRef = useRef<HTMLDivElement>(null);
 
   const scrollSimilarSlider = (direction: 'left' | 'right') => {
@@ -106,8 +109,9 @@ export default function PropertyDetailPage() {
           const currentId = property.id;
           const currentMongoId = (property as any)._id?.toString();
 
-          // Filter out the active property and ensure relevance
+          // Filter out the active property, inactive properties, and ensure relevance
           const filtered = data.data.filter((p: PropertyItem) => {
+            if (p.available === false) return false;
             if (p.pid && currentPid && p.pid.toUpperCase() === currentPid) return false;
             if (p.id && currentId && p.id === currentId) return false;
             if ((p as any)._id && currentMongoId && (p as any)._id.toString() === currentMongoId) return false;
@@ -150,8 +154,11 @@ export default function PropertyDetailPage() {
             if (aCityMatch && !bCityMatch) return -1;
             if (!aCityMatch && bCityMatch) return 1;
 
-            const aDiff = Math.abs(a.price - property.price);
-            const bDiff = Math.abs(b.price - property.price);
+            const numA = parseInt(String(a.price).replace(/[^0-9]/g, ''), 10) || 0;
+            const numB = parseInt(String(b.price).replace(/[^0-9]/g, ''), 10) || 0;
+            const numProp = parseInt(String(property.price).replace(/[^0-9]/g, ''), 10) || 0;
+            const aDiff = Math.abs(numA - numProp);
+            const bDiff = Math.abs(numB - numProp);
             return aDiff - bDiff;
           });
 
@@ -172,17 +179,60 @@ export default function PropertyDetailPage() {
     fetchSimilarProperties();
   }, [property?.pid, property?.id, property?.bedrooms, property?.category, property?.type, property?.locality, property?.city, property?.price]);
 
+  // Helper functions for videos
+  const getYouTubeEmbedUrl = (url: string) => {
+    if (!url) return null;
+    const match = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|shorts\/))([a-zA-Z0-9_-]{11})/);
+    if (match && match[1]) {
+      return `https://www.youtube.com/embed/${match[1]}?rel=0&modestbranding=1`;
+    }
+    return null;
+  };
+
+  const getVideoPoster = (url: string) => {
+    if (!url) return '';
+    if (url.includes('res.cloudinary.com')) {
+      return url.replace(/\.(mp4|mov|webm|mkv|avi|m4v)(\?.*)?$/i, '.jpg').replace('/video/upload/', '/video/upload/so_0,q_auto,f_auto/');
+    }
+    const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|shorts\/))([a-zA-Z0-9_-]{11})/);
+    if (ytMatch && ytMatch[1]) {
+      return `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+    }
+    return property?.images?.[0] || '';
+  };
+
+  const rawVideos = property?.videos && property.videos.length > 0
+    ? property.videos
+    : property?.video ? [property.video] : [];
+  const rawImages = property?.images && property.images.length > 0
+    ? property.images
+    : [];
+
+  const mediaItems: { type: 'video' | 'image'; url: string; poster?: string }[] = [
+    ...rawVideos.map((v) => ({
+      type: 'video' as const,
+      url: v,
+      poster: property?.videoThumbnail || getVideoPoster(v) || '',
+    })),
+    ...rawImages.map((img) => ({
+      type: 'image' as const,
+      url: img,
+    })),
+  ];
+
+  const images = mediaItems;
+
   // Keyboard navigation for Lightbox
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
-    if (!isLightboxOpen) return;
+    if (!isLightboxOpen || images.length === 0) return;
     if (e.key === 'ArrowLeft') {
-      setCurrentImgIndex((prev) => (prev - 1 + (property?.images?.length || 1)) % (property?.images?.length || 1));
+      setCurrentImgIndex((prev) => (prev - 1 + images.length) % images.length);
     } else if (e.key === 'ArrowRight') {
-      setCurrentImgIndex((prev) => (prev + 1) % (property?.images?.length || 1));
+      setCurrentImgIndex((prev) => (prev + 1) % images.length);
     } else if (e.key === 'Escape') {
       setIsLightboxOpen(false);
     }
-  }, [isLightboxOpen, property?.images?.length]);
+  }, [isLightboxOpen, images.length]);
 
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -202,16 +252,66 @@ export default function PropertyDetailPage() {
   }
 
   const wish = isWishlisted(property.id || property.pid);
-  const images = property.images && property.images.length > 0
-    ? property.images
-    : ['https://images.unsplash.com/photo-1560448204-e02f11c3d0e2?auto=format&fit=crop&w=800&q=80'];
+  const isAdmin = Boolean(user && user.role === 'admin');
+  const isOwner = Boolean(
+    user && (
+      isAdmin ||
+      (user.email && property.ownerEmail && user.email.toLowerCase().trim() === property.ownerEmail.toLowerCase().trim())
+    )
+  );
   const hasPrivateContactAccess = Boolean(property.ownerName && property.ownerPhone);
   const listedBy = hasPrivateContactAccess ? property.ownerName : 'Verified owner';
 
-  const formatPrice = (val: number) => {
-    if (val >= 10000000) return `₹${(val / 10000000).toFixed(2)} Cr`;
-    if (val >= 100000) return `₹${(val / 100000).toFixed(2)} Lakh`;
-    return `₹${val.toLocaleString('en-IN')}`;
+  const handleAdminVerifyToggle = async () => {
+    if (!property || verifying) return;
+    setVerifying(true);
+    const targetVerified = !property.verified;
+    try {
+      const res = await fetch(`/api/properties/${property.pid || property.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ verified: targetVerified })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setProperty(prev => prev ? { ...prev, verified: targetVerified } : null);
+        showToast(targetVerified ? '🎉 Property verified and live!' : 'Property marked as unverified.', 'success');
+      } else {
+        showToast(data.message || 'Failed to update verification status', 'error');
+      }
+    } catch {
+      showToast('Network error while updating verification', 'error');
+    } finally {
+      setVerifying(false);
+    }
+  };
+
+  const formatPrice = (val: number | string | any) => {
+    if (val === undefined || val === null || val === '') return '₹0';
+    if (typeof val === 'string') {
+      const trimmed = val.trim();
+      if (trimmed.includes('-')) {
+        const parts = trimmed.split('-').map(p => p.trim().replace(/[^0-9.]/g, ''));
+        if (parts.length === 2 && parts[0] && parts[1]) {
+          const p1 = Number(parts[0]);
+          const p2 = Number(parts[1]);
+          if (!isNaN(p1) && !isNaN(p2)) {
+            return `₹${p1.toLocaleString('en-IN')} - ₹${p2.toLocaleString('en-IN')}`;
+          }
+        }
+        return trimmed.startsWith('₹') ? trimmed : `₹${trimmed}`;
+      }
+      const num = Number(trimmed.replace(/,/g, ''));
+      if (!isNaN(num) && num > 0) {
+        val = num;
+      } else {
+        return trimmed.startsWith('₹') ? trimmed : `₹${trimmed}`;
+      }
+    }
+    const numVal = Number(val);
+    if (numVal >= 10000000) return `₹${(numVal / 10000000).toFixed(2)} Cr`;
+    if (numVal >= 100000) return `₹${(numVal / 100000).toFixed(2)} Lakh`;
+    return `₹${numVal.toLocaleString('en-IN')}`;
   };
 
   const handleShare = () => {
@@ -257,36 +357,173 @@ export default function PropertyDetailPage() {
     setTimeout(() => setIsSwiping(false), 50);
   };
 
+  const renderThumbnailTile = (idx: number, isLastWithMore?: boolean, moreCount?: number) => {
+    const item = images[idx];
+    if (!item) return null;
+    return (
+      <button
+        key={idx}
+        type="button"
+        onClick={() => {
+          setCurrentImgIndex(idx);
+          setIsLightboxOpen(true);
+        }}
+        className={`relative w-full h-full rounded-2xl overflow-hidden border-2 transition-all cursor-pointer group bg-[#07110a] ${
+          currentImgIndex === idx ? 'border-emerald-500 ring-2 ring-emerald-500/40' : 'border-transparent opacity-90 hover:opacity-100'
+        }`}
+      >
+        {item.type === 'video' ? (
+          item.poster ? (
+            <LazyImage
+              src={item.poster}
+              alt={`Media ${idx + 1}`}
+              className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-[#06140c] via-[#091e13] to-[#040c07] flex items-center justify-center">
+              <Video size={28} className="text-emerald-500/40" />
+            </div>
+          )
+        ) : (
+          <LazyImage
+            src={item.url}
+            alt={`Media ${idx + 1}`}
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+        )}
+        {item.type === 'video' && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-black/30">
+            <div className="w-10 h-10 rounded-full bg-emerald-500 text-black flex items-center justify-center shadow-xl group-hover:scale-110 transition-transform">
+              <Play size={18} className="fill-current ml-0.5" />
+            </div>
+          </div>
+        )}
+        {isLastWithMore && moreCount && moreCount > 0 ? (
+          <div className="absolute inset-0 bg-black/75 backdrop-blur-xs flex flex-col items-center justify-center text-white space-y-1">
+            <span className="text-base sm:text-xl font-extrabold text-emerald-400 font-mono">+{moreCount}</span>
+            <span className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-gray-200">More</span>
+          </div>
+        ) : null}
+      </button>
+    );
+  };
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
-      {/* Back Navigation & Share */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={() => router.back()}
-          className="flex cursor-pointer items-center space-x-1.5 text-xs font-bold text-gray-300 hover:text-emerald-400 transition-colors"
-        >
-          <ChevronLeft size={18} />
-          <span>Back</span>
-        </button>
-
-        <div className="flex items-center space-x-2">
+    <div className="bg-[#050806] min-h-screen text-gray-100 pb-20">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 space-y-8 sm:space-y-12">
+        {/* Sub-Header / Breadcrumb with Property ID */}
+        <div className="flex items-center justify-between text-xs text-gray-400">
           <button
-            onClick={handleShare}
-            className="flex cursor-pointer items-center space-x-1 px-3 py-1.5 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold transition-colors"
+            onClick={() => router.back()}
+            className="flex items-center space-x-1.5 hover:text-white transition-colors cursor-pointer text-xs font-bold text-gray-300 hover:text-emerald-400"
           >
-            <Copy size={14} />
-            <span>Copy Link</span>
+            <ChevronLeft size={16} />
+            <span>Back to listings</span>
           </button>
 
-          <button
-            onClick={() => toggleWishlist(property.id || property.pid)}
-            className={`p-2 cursor-pointer rounded-xl transition-all ${wish ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-              }`}
-          >
-            <Heart size={16} fill={wish ? 'currentColor' : 'none'} />
-          </button>
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <button
+              onClick={handleShare}
+              className="p-2 bg-[#091710] border border-emerald-950 hover:bg-[#10241a] text-gray-300 hover:text-white rounded-xl transition-all cursor-pointer flex items-center space-x-1"
+              title="Copy Link"
+            >
+              <Copy size={14} />
+              <span className="hidden sm:inline text-xs font-semibold">Share</span>
+            </button>
+            <button
+              onClick={() => toggleWishlist(property.id || property.pid)}
+              className={`p-2 cursor-pointer rounded-xl transition-all ${wish ? 'bg-red-500 text-white' : 'bg-[#091710] text-gray-300 hover:text-white border border-emerald-950'
+                }`}
+            >
+              <Heart size={16} fill={wish ? 'currentColor' : 'none'} />
+            </button>
+          </div>
         </div>
-      </div>
+
+        {/* Owner / Admin Management Quick Banner */}
+      {isOwner && (
+        <div className={`p-4 rounded-2xl border flex flex-col sm:flex-row items-center justify-between gap-3 shadow-xl ${
+          property.available === false
+            ? 'bg-[#1a1208] border-amber-800/80'
+            : !property.verified
+            ? 'bg-[#181308] border-amber-700/80'
+            : 'bg-[#091810] border-emerald-800/80'
+        }`}>
+          <div className="flex items-center space-x-3 text-center sm:text-left">
+            <div className={`w-10 h-10 rounded-2xl border flex items-center justify-center shrink-0 shadow-inner ${
+              property.available === false
+                ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                : !property.verified
+                ? 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                : 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30'
+            }`}>
+              <Building2 size={20} />
+            </div>
+            <div>
+              <div className="flex items-center space-x-2 flex-wrap justify-center sm:justify-start">
+                <p className="text-xs font-extrabold text-emerald-300">
+                  {isAdmin ? `👑 Admin Moderation View (${property.pid})` : `You are managing this listing (${property.pid})`}
+                </p>
+                {property.available === false ? (
+                  <span className="px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-400 border border-zinc-700 text-[9px] font-bold">
+                    INACTIVE (HIDDEN)
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[9px] font-bold">
+                    ACTIVE & LIVE
+                  </span>
+                )}
+                {property.verified ? (
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[9px] font-extrabold flex items-center space-x-1">
+                    <CheckCircle2 size={10} />
+                    <span>VERIFIED</span>
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800 text-[9px] font-extrabold flex items-center space-x-1">
+                    <Clock size={10} />
+                    <span>PENDING VERIFICATION</span>
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                {isAdmin
+                  ? `Review uploaded photos, details, pricing, and owner contact (${property.ownerName || 'Direct Owner'}: ${property.ownerPhone || 'N/A'}).`
+                  : 'Update photos, adjust rental pricing, toggle active/inactive status, or edit specifications anytime.'}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center space-x-2 shrink-0 flex-wrap justify-center">
+            {isAdmin && (
+              <button
+                type="button"
+                disabled={verifying}
+                onClick={handleAdminVerifyToggle}
+                className={`px-4 py-2 text-xs font-extrabold rounded-full shadow-md transition-all flex items-center space-x-1.5 cursor-pointer disabled:opacity-50 ${
+                  property.verified
+                    ? 'bg-[#180d10] hover:bg-rose-950 text-rose-300 border border-rose-800/80'
+                    : 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-emerald-500/20'
+                }`}
+              >
+                {property.verified ? <XCircle size={13} /> : <CheckCircle2 size={13} />}
+                <span>{property.verified ? 'Unverify Listing' : 'Verify & Approve Now'}</span>
+              </button>
+            )}
+            <Link
+              href={`/post-property?edit=${property.pid || property.id}`}
+              className="px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs rounded-full shadow-md shadow-emerald-500/20 transition-all flex items-center space-x-1.5 cursor-pointer"
+            >
+              <Edit3 size={13} />
+              <span>Edit Property</span>
+            </Link>
+            <Link
+              href={isAdmin ? "/admin" : "/dashboard?tab=my-properties"}
+              className="px-3.5 py-2 bg-[#050806] hover:bg-[#0c1810] text-gray-300 hover:text-white border border-emerald-900 rounded-full text-xs font-bold transition-colors cursor-pointer"
+            >
+              {isAdmin ? "Admin Portal →" : "My Dashboard"}
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Main Header & Tags */}
       <div className="space-y-2">
@@ -294,10 +531,20 @@ export default function PropertyDetailPage() {
           <span className="bg-gray-900 text-white font-mono text-xs font-semibold px-2.5 py-1 rounded-md">
             ID: {property.pid}
           </span>
-          {property.verified && (
+          {property.available === false && (
+            <span className="bg-zinc-800 text-zinc-300 text-xs font-semibold px-2.5 py-1 rounded-md">
+              Inactive Listing
+            </span>
+          )}
+          {property.verified ? (
             <span className="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-1 rounded-md flex items-center space-x-1">
               <ShieldCheck size={14} />
               <span>Verified Listing</span>
+            </span>
+          ) : (
+            <span className="bg-amber-950/90 text-amber-300 border border-amber-800/80 text-xs font-semibold px-2.5 py-1 rounded-md flex items-center space-x-1">
+              <Clock size={14} />
+              <span>Under Verification (Admin Review)</span>
             </span>
           )}
           <span className="bg-orange-100 text-orange-800 text-xs font-bold px-2.5 py-1 rounded-md uppercase">
@@ -315,221 +562,219 @@ export default function PropertyDetailPage() {
         </div>
       </div>
 
-      {/* Seamless Photo Gallery Hero Grid */}
-      <div className="relative rounded-3xl overflow-hidden bg-[#070d0a] border border-emerald-950/80 shadow-2xl">
-        <div className="h-[360px] sm:h-[440px] lg:h-[460px] grid grid-cols-1 lg:grid-cols-2 gap-2.5 p-2.5 bg-[#050806]">
-          {/* Main Left Featured Frame (50% width on Desktop) */}
-          <div
-            onTouchStart={handleTouchStart}
-            onTouchMove={handleTouchMove}
-            onTouchEnd={handleTouchEnd}
-            onClick={() => {
-              if (!isSwiping) {
-                setIsLightboxOpen(true);
-              }
-            }}
-            className={`relative h-full rounded-2xl overflow-hidden group bg-[#07110a] cursor-pointer select-none ${images.length === 1 ? 'lg:col-span-2' : 'lg:col-span-1'
-              }`}
-          >
-            {/* Sliding Track */}
+      {/* Seamless Photo & Video Gallery Hero Grid */}
+      {images.length === 0 ? (
+        <div className="relative rounded-3xl overflow-hidden bg-[#070d0a] border border-emerald-950/80 p-8 sm:p-12 flex flex-col items-center justify-center text-center space-y-3 min-h-[260px] sm:min-h-[320px]">
+          <div className="w-16 h-16 rounded-2xl bg-[#091710] border border-emerald-900/60 flex items-center justify-center text-emerald-400">
+            <Building2 size={32} />
+          </div>
+          <div>
+            <h3 className="text-base sm:text-lg font-bold text-white">No Photos or Videos Uploaded</h3>
+            <p className="text-xs text-gray-400 max-w-sm mt-1">
+              The owner has not uploaded any photos or walkthrough videos for this listing yet.
+            </p>
+          </div>
+        </div>
+      ) : (
+        <div className="relative rounded-3xl overflow-hidden bg-[#070d0a] border border-emerald-950/80 shadow-2xl">
+          <div className="h-[360px] sm:h-[440px] lg:h-[460px] grid grid-cols-1 lg:grid-cols-2 gap-2.5 p-2.5 bg-[#050806]">
+            {/* Main Left Featured Frame (50% width on Desktop) */}
             <div
-              className="flex w-full h-full transition-transform duration-300 ease-out"
-              style={{ transform: `translateX(-${currentImgIndex * 100}%)` }}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+              onClick={() => {
+                if (!isSwiping && images[currentImgIndex]?.type !== 'video') {
+                  setIsLightboxOpen(true);
+                }
+              }}
+              className={`relative h-full rounded-2xl overflow-hidden group bg-[#07110a] select-none ${images.length === 1 ? 'lg:col-span-2' : 'lg:col-span-1'} ${images[currentImgIndex]?.type !== 'video' ? 'cursor-pointer' : ''}`}
             >
-              {images.map((img, idx) => (
-                <div key={idx} className="w-full h-full shrink-0 relative">
-                  <LazyImage
-                    src={img}
-                    alt={`${property.title} - Photo ${idx + 1}`}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
+              {/* Sliding Track */}
+              <div
+                className="flex w-full h-full transition-transform duration-300 ease-out"
+                style={{ transform: `translateX(-${currentImgIndex * 100}%)` }}
+              >
+                {images.map((item, idx) => (
+                  <div key={idx} className="w-full h-full shrink-0 relative bg-black flex items-center justify-center overflow-hidden">
+                    {item.type === 'video' ? (
+                      <div className="relative w-full h-full flex items-center justify-center bg-black">
+                        {(() => {
+                          const embedUrl = getYouTubeEmbedUrl(item.url);
+                          if (embedUrl) {
+                            return (
+                              <iframe
+                                src={embedUrl}
+                                title={`${property.title} Video Tour`}
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                                allowFullScreen
+                                className="w-full h-full border-0 pointer-events-auto"
+                              />
+                            );
+                          }
+                          return (
+                            <video
+                              controls
+                              playsInline
+                              preload="metadata"
+                              poster={item.poster || undefined}
+                              className="w-full h-full object-contain bg-black pointer-events-auto"
+                            >
+                              <source src={item.url} type="video/mp4" />
+                              <source src={item.url} type="video/webm" />
+                              Your browser does not support video playback.
+                            </video>
+                          );
+                        })()}
+                      </div>
+                    ) : (
+                      <LazyImage
+                        src={item.url}
+                        alt={`${property.title} - Photo ${idx + 1}`}
+                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Desktop Navigation Arrows */}
+              {images.length > 1 && (
+                <div className="hidden sm:flex absolute inset-0 z-20 pointer-events-none items-center justify-between px-3">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentImgIndex((prev) => (prev - 1 + images.length) % images.length);
+                    }}
+                    className="pointer-events-auto p-2.5 sm:p-3 rounded-full bg-black/75 hover:bg-black text-white border border-white/20 backdrop-blur-md shadow-xl transition-all hover:scale-110 active:scale-95 cursor-pointer flex items-center justify-center"
+                    aria-label="Previous media"
+                  >
+                    <ChevronLeft size={20} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setCurrentImgIndex((prev) => (prev + 1) % images.length);
+                    }}
+                    className="pointer-events-auto p-2.5 sm:p-3 rounded-full bg-black/75 hover:bg-black text-white border border-white/20 backdrop-blur-md shadow-xl transition-all hover:scale-110 active:scale-95 cursor-pointer flex items-center justify-center"
+                    aria-label="Next media"
+                  >
+                    <ChevronRight size={20} />
+                  </button>
                 </div>
-              ))}
+              )}
+
+              {/* Media Counter Badge */}
+              <div className="absolute bottom-3 left-3 z-20 bg-black/75 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1 rounded-full border border-white/10 flex items-center space-x-1.5 shadow-lg pointer-events-none">
+                {images[currentImgIndex]?.type === 'video' ? (
+                  <>
+                    <Video size={13} className="text-emerald-400" />
+                    <span>Video {currentImgIndex + 1} of {images.length}</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera size={13} className="text-emerald-400" />
+                    <span>Photo {currentImgIndex + 1} of {images.length}</span>
+                  </>
+                )}
+              </div>
+
+              {/* Mobile Swipe Pagination Dots */}
+              {images.length > 1 && (
+                <div className="sm:hidden absolute bottom-3.5 right-3.5 z-20 flex items-center space-x-1 bg-black/70 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-white/10 pointer-events-none">
+                  {images.slice(0, 6).map((_, idx) => (
+                    <span
+                      key={idx}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentImgIndex
+                          ? 'w-3.5 bg-emerald-400'
+                          : 'w-1.5 bg-white/40'
+                        }`}
+                    />
+                  ))}
+                  {images.length > 6 && (
+                    <span className="text-[9px] text-gray-400 font-mono leading-none">+</span>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Desktop Navigation Arrows */}
-            {images.length > 1 && (
-              <div className="hidden sm:flex absolute inset-0 z-20 pointer-events-none items-center justify-between px-3">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCurrentImgIndex((prev) => (prev - 1 + images.length) % images.length);
-                  }}
-                  className="pointer-events-auto p-2.5 sm:p-3 rounded-full bg-black/75 hover:bg-black text-white border border-white/20 backdrop-blur-md shadow-xl transition-all hover:scale-110 active:scale-95 cursor-pointer flex items-center justify-center"
-                  aria-label="Previous image"
-                >
-                  <ChevronLeft size={20} />
-                </button>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setCurrentImgIndex((prev) => (prev + 1) % images.length);
-                  }}
-                  className="pointer-events-auto p-2.5 sm:p-3 rounded-full bg-black/75 hover:bg-black text-white border border-white/20 backdrop-blur-md shadow-xl transition-all hover:scale-110 active:scale-95 cursor-pointer flex items-center justify-center"
-                  aria-label="Next image"
-                >
-                  <ChevronRight size={20} />
-                </button>
+            {/* Right Thumbnails Dynamic Grid Layout for 2 Images */}
+            {images.length === 2 && (
+              <div className="hidden lg:block lg:col-span-1 h-full min-h-0">
+                {renderThumbnailTile(1)}
               </div>
             )}
 
-            {/* Photo Counter Badge */}
-            <div className="absolute bottom-3 left-3 z-20 bg-black/75 backdrop-blur-md text-white text-[11px] font-bold px-3 py-1 rounded-full border border-white/10 flex items-center space-x-1.5 shadow-lg">
-              <Camera size={13} className="text-emerald-400" />
-              <span>Photo {currentImgIndex + 1} of {images.length}</span>
-            </div>
+            {/* Right Thumbnails Dynamic Grid Layout for 3 Images */}
+            {images.length === 3 && (
+              <div className="hidden lg:grid lg:col-span-1 grid-cols-1 grid-rows-2 gap-2.5 h-full min-h-0">
+                {[1, 2].map((actualIndex) => renderThumbnailTile(actualIndex))}
+              </div>
+            )}
 
-            {/* Mobile Swipe Pagination Dots */}
-            {images.length > 1 && (
-              <div className="sm:hidden absolute bottom-3.5 right-3.5 z-20 flex items-center space-x-1 bg-black/70 backdrop-blur-md px-2.5 py-1.5 rounded-full border border-white/10">
-                {images.slice(0, 6).map((_, idx) => (
-                  <span
-                    key={idx}
-                    className={`h-1.5 rounded-full transition-all duration-300 ${idx === currentImgIndex
-                        ? 'w-3.5 bg-emerald-400'
-                        : 'w-1.5 bg-white/40'
-                      }`}
-                  />
-                ))}
-                {images.length > 6 && (
-                  <span className="text-[9px] text-gray-400 font-mono leading-none">+</span>
-                )}
+            {/* Right Thumbnails Dynamic Grid Layout for 4 Images */}
+            {images.length === 4 && (
+              <div className="hidden lg:grid lg:col-span-1 grid-cols-2 grid-rows-2 gap-2.5 h-full min-h-0 overflow-hidden">
+                <div className="col-span-2 row-span-1 h-full">
+                  {renderThumbnailTile(1)}
+                </div>
+                <div className="col-span-1 row-span-1 h-full">
+                  {renderThumbnailTile(2)}
+                </div>
+                <div className="col-span-1 row-span-1 h-full">
+                  {renderThumbnailTile(3)}
+                </div>
+              </div>
+            )}
+
+            {/* Right Thumbnails Dynamic Grid Layout for 5+ Images */}
+            {images.length >= 5 && (
+              <div className="hidden lg:grid lg:col-span-1 grid-cols-2 grid-rows-2 gap-2.5 h-full min-h-0 overflow-hidden">
+                {[1, 2, 3, 4].map((actualIndex) => {
+                  const isLastTile = actualIndex === 4;
+                  const remainingCount = images.length - 5;
+                  return renderThumbnailTile(actualIndex, isLastTile, remainingCount);
+                })}
               </div>
             )}
           </div>
 
-          {/* Right Thumbnails Dynamic Grid Layout for 2 Images */}
-          {images.length === 2 && (
-            <div className="hidden lg:block lg:col-span-1 h-full min-h-0">
-              <button
-                type="button"
-                onClick={() => {
-                  setCurrentImgIndex(1);
-                  setIsLightboxOpen(true);
-                }}
-                className={`relative w-full h-full rounded-2xl overflow-hidden border-2 transition-all cursor-pointer group bg-[#07110a] ${currentImgIndex === 1 ? 'border-emerald-500 ring-2 ring-emerald-500/40' : 'border-transparent opacity-90 hover:opacity-100'
-                  }`}
-              >
-                <LazyImage src={images[1]} alt="Photo 2" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-              </button>
-            </div>
+          {/* Watch Video Tour Button in Hero */}
+          {rawVideos.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setCurrentImgIndex(0);
+                const videoElem = document.getElementById('property-video-tour');
+                if (videoElem) {
+                  videoElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+              }}
+              className="absolute bottom-4 left-4 z-20 px-3.5 py-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs flex items-center space-x-1.5 shadow-2xl transition-all cursor-pointer hover:scale-105 active:scale-95"
+            >
+              <Video size={14} className="stroke-[2.5]" />
+              <span>Watch Video Tour</span>
+            </button>
           )}
 
-          {/* Right Thumbnails Dynamic Grid Layout for 3 Images */}
-          {images.length === 3 && (
-            <div className="hidden lg:grid lg:col-span-1 grid-cols-1 grid-rows-2 gap-2.5 h-full min-h-0">
-              {[1, 2].map((actualIndex) => (
-                <button
-                  key={actualIndex}
-                  type="button"
-                  onClick={() => {
-                    setCurrentImgIndex(actualIndex);
-                    setIsLightboxOpen(true);
-                  }}
-                  className={`relative w-full h-full rounded-2xl overflow-hidden border-2 transition-all cursor-pointer group bg-[#07110a] ${currentImgIndex === actualIndex ? 'border-emerald-500 ring-2 ring-emerald-500/40' : 'border-transparent opacity-90 hover:opacity-100'
-                    }`}
-                >
-                  <LazyImage
-                    src={images[actualIndex]}
-                    alt={`Photo ${actualIndex + 1}`}
-                    className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                  />
-                </button>
-              ))}
-            </div>
-          )}
-
-          {/* Right Thumbnails Dynamic Grid Layout for 4 Images */}
-          {images.length === 4 && (
-            <div className="hidden lg:grid lg:col-span-1 grid-cols-2 grid-rows-2 gap-2.5 h-full min-h-0 overflow-hidden">
-              <button
-                type="button"
-                onClick={() => {
-                  setCurrentImgIndex(1);
-                  setIsLightboxOpen(true);
-                }}
-                className={`col-span-2 row-span-1 relative w-full h-full rounded-2xl overflow-hidden border-2 transition-all cursor-pointer group bg-[#07110a] ${currentImgIndex === 1 ? 'border-emerald-500 ring-2 ring-emerald-500/40' : 'border-transparent opacity-90 hover:opacity-100'
-                  }`}
-              >
-                <LazyImage src={images[1]} alt="Photo 2" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setCurrentImgIndex(2);
-                  setIsLightboxOpen(true);
-                }}
-                className={`col-span-1 row-span-1 relative w-full h-full rounded-2xl overflow-hidden border-2 transition-all cursor-pointer group bg-[#07110a] ${currentImgIndex === 2 ? 'border-emerald-500 ring-2 ring-emerald-500/40' : 'border-transparent opacity-90 hover:opacity-100'
-                  }`}
-              >
-                <LazyImage src={images[2]} alt="Photo 3" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-              </button>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setCurrentImgIndex(3);
-                  setIsLightboxOpen(true);
-                }}
-                className={`col-span-1 row-span-1 relative w-full h-full rounded-2xl overflow-hidden border-2 transition-all cursor-pointer group bg-[#07110a] ${currentImgIndex === 3 ? 'border-emerald-500 ring-2 ring-emerald-500/40' : 'border-transparent opacity-90 hover:opacity-100'
-                  }`}
-              >
-                <LazyImage src={images[3]} alt="Photo 4" className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-              </button>
-            </div>
-          )}
-
-          {/* Right Thumbnails Dynamic Grid Layout for 5+ Images */}
-          {images.length >= 5 && (
-            <div className="hidden lg:grid lg:col-span-1 grid-cols-2 grid-rows-2 gap-2.5 h-full min-h-0 overflow-hidden">
-              {[1, 2, 3, 4].map((actualIndex) => {
-                const isLastTile = actualIndex === 4;
-                const remainingCount = images.length - 5;
-                return (
-                  <button
-                    key={actualIndex}
-                    type="button"
-                    onClick={() => {
-                      setCurrentImgIndex(actualIndex);
-                      setIsLightboxOpen(true);
-                    }}
-                    className={`relative w-full h-full rounded-2xl overflow-hidden border-2 transition-all cursor-pointer group bg-[#07110a] ${currentImgIndex === actualIndex ? 'border-emerald-500 ring-2 ring-emerald-500/40' : 'border-transparent opacity-90 hover:opacity-100'
-                      }`}
-                  >
-                    <LazyImage src={images[actualIndex]} alt={`Photo ${actualIndex + 1}`} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-
-                    {isLastTile && remainingCount > 0 && (
-                      <div className="absolute inset-0 bg-black/70 backdrop-blur-[2px] flex flex-col items-center justify-center text-white transition-all hover:bg-black/60">
-                        <Grid size={20} className="text-emerald-400 mb-0.5" />
-                        <span className="text-xs font-extrabold">+{remainingCount} Photos</span>
-                        <span className="text-[9px] text-emerald-300 font-semibold uppercase tracking-wider">View all</span>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
+          {/* View All Media Button */}
+          {images.length > 1 && (
+            <button
+              type="button"
+              onClick={() => setIsLightboxOpen(true)}
+              className="absolute bottom-4 right-4 z-20 px-4 py-2.5 rounded-2xl bg-black/85 hover:bg-black text-white border border-emerald-500/50 backdrop-blur-md text-xs font-extrabold flex items-center space-x-2 shadow-2xl transition-all cursor-pointer hover:scale-105 active:scale-95"
+            >
+              <Grid size={15} className="text-emerald-400" />
+              <span>View All {images.length} Media</span>
+            </button>
           )}
         </div>
+      )}
 
-        {/* View All Photos Button */}
-        {images.length > 1 && (
-          <button
-            type="button"
-            onClick={() => setIsLightboxOpen(true)}
-            className="absolute bottom-4 right-4 z-20 px-4 py-2.5 rounded-2xl bg-black/85 hover:bg-black text-white border border-emerald-500/50 backdrop-blur-md text-xs font-extrabold flex items-center space-x-2 shadow-2xl transition-all cursor-pointer hover:scale-105 active:scale-95"
-          >
-            <Grid size={15} className="text-emerald-400" />
-            <span>View All {images.length} Photos</span>
-          </button>
-        )}
-      </div>
-
-      {/* Full-Screen Photo Lightbox Modal */}
-      {isLightboxOpen && (
+      {/* Full-Screen Photo & Video Lightbox Modal */}
+      {isLightboxOpen && images.length > 0 && (
         <div
           className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-2xl flex flex-col justify-between p-3 sm:p-5 pb-6 sm:pb-5 text-white w-screen h-screen overflow-hidden"
           onClick={() => setIsLightboxOpen(false)}
@@ -538,7 +783,9 @@ export default function PropertyDetailPage() {
           <div className="flex items-center justify-between border-b border-gray-800 pb-3 gap-3 shrink-0" onClick={(e) => e.stopPropagation()}>
             <div className="flex-1 min-w-0">
               <h3 className="text-sm sm:text-base font-extrabold text-white leading-snug break-words">{property.title}</h3>
-              <p className="text-[11px] sm:text-xs text-emerald-400 font-mono mt-0.5">Photo {currentImgIndex + 1} of {images.length}</p>
+              <p className="text-[11px] sm:text-xs text-emerald-400 font-mono mt-0.5">
+                {images[currentImgIndex]?.type === 'video' ? 'Video' : 'Photo'} {currentImgIndex + 1} of {images.length}
+              </p>
             </div>
 
             <button
@@ -550,7 +797,7 @@ export default function PropertyDetailPage() {
             </button>
           </div>
 
-          {/* Main Active Image View */}
+          {/* Main Active Media View */}
           <div
             onTouchStart={handleTouchStart}
             onTouchMove={handleTouchMove}
@@ -558,11 +805,44 @@ export default function PropertyDetailPage() {
             className="relative flex-1 min-h-0 w-full flex items-center justify-center py-2 overflow-hidden select-none"
             onClick={(e) => e.stopPropagation()}
           >
-            <LazyImage
-              src={images[currentImgIndex]}
-              alt={property.title}
-              className="max-h-[62vh] sm:max-h-[72vh] max-w-4xl lg:max-w-5xl w-auto h-auto object-contain rounded-2xl shadow-2xl"
-            />
+            {images[currentImgIndex]?.type === 'video' ? (
+              <div className="w-full max-w-4xl lg:max-w-5xl aspect-video rounded-2xl overflow-hidden shadow-2xl bg-black border border-emerald-900/60 flex items-center justify-center">
+                {(() => {
+                  const currentVideo = images[currentImgIndex];
+                  const embedUrl = getYouTubeEmbedUrl(currentVideo.url);
+                  if (embedUrl) {
+                    return (
+                      <iframe
+                        src={embedUrl}
+                        title={`${property.title} Video Tour`}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="w-full h-full border-0"
+                      />
+                    );
+                  }
+                  return (
+                    <video
+                      controls
+                      autoPlay
+                      playsInline
+                      poster={currentVideo.poster || undefined}
+                      className="w-full h-full object-contain bg-black"
+                    >
+                      <source src={currentVideo.url} type="video/mp4" />
+                      <source src={currentVideo.url} type="video/webm" />
+                      Your browser does not support video playback.
+                    </video>
+                  );
+                })()}
+              </div>
+            ) : (
+              <LazyImage
+                src={images[currentImgIndex]?.url || ''}
+                alt={property.title}
+                className="max-h-[62vh] sm:max-h-[72vh] max-w-4xl lg:max-w-5xl w-auto h-auto object-contain rounded-2xl shadow-2xl"
+              />
+            )}
 
             {images.length > 1 && (
               <>
@@ -570,7 +850,7 @@ export default function PropertyDetailPage() {
                   type="button"
                   onClick={() => setCurrentImgIndex((prev) => (prev - 1 + images.length) % images.length)}
                   className="hidden sm:flex absolute left-2 sm:left-6 top-1/2 -translate-y-1/2 p-2.5 sm:p-3 rounded-full bg-black/70 hover:bg-black border border-white/20 text-white shadow-xl transition-all cursor-pointer items-center justify-center"
-                  aria-label="Previous image"
+                  aria-label="Previous item"
                 >
                   <ChevronLeft size={22} />
                 </button>
@@ -578,7 +858,7 @@ export default function PropertyDetailPage() {
                   type="button"
                   onClick={() => setCurrentImgIndex((prev) => (prev + 1) % images.length)}
                   className="hidden sm:flex absolute right-2 sm:right-6 top-1/2 -translate-y-1/2 p-2.5 sm:p-3 rounded-full bg-black/70 hover:bg-black border border-white/20 text-white shadow-xl transition-all cursor-pointer items-center justify-center"
-                  aria-label="Next image"
+                  aria-label="Next item"
                 >
                   <ChevronRight size={22} />
                 </button>
@@ -588,15 +868,39 @@ export default function PropertyDetailPage() {
 
           {/* Bottom Thumbnail Strip */}
           <div className="pt-2.5 pb-2 border-t border-gray-900 overflow-x-auto flex items-center justify-center space-x-2.5 max-w-4xl mx-auto w-full shrink-0" onClick={(e) => e.stopPropagation()}>
-            {images.map((img, idx) => (
+            {images.map((item, idx) => (
               <button
                 key={idx}
                 type="button"
                 onClick={() => setCurrentImgIndex(idx)}
-                className={`relative w-14 h-11 sm:w-16 sm:h-12 rounded-lg sm:rounded-xl overflow-hidden border-2 shrink-0 transition-all cursor-pointer ${currentImgIndex === idx ? 'border-emerald-500 scale-105 shadow-md shadow-emerald-500/30' : 'border-transparent opacity-50 hover:opacity-100'
-                  }`}
+                className={`relative w-14 h-11 sm:w-16 sm:h-12 rounded-lg sm:rounded-xl overflow-hidden border-2 shrink-0 transition-all cursor-pointer ${
+                  currentImgIndex === idx ? 'border-emerald-500 scale-105 shadow-md shadow-emerald-500/30' : 'border-transparent opacity-50 hover:opacity-100'
+                }`}
               >
-                <LazyImage src={img} alt={`Thumbnail ${idx + 1}`} className="w-full h-full object-cover" />
+                {item.type === 'video' ? (
+                  item.poster ? (
+                    <LazyImage
+                      src={item.poster}
+                      alt={`Thumbnail ${idx + 1}`}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-[#091710] flex items-center justify-center">
+                      <Video size={16} className="text-emerald-400" />
+                    </div>
+                  )
+                ) : (
+                  <LazyImage
+                    src={item.url}
+                    alt={`Thumbnail ${idx + 1}`}
+                    className="w-full h-full object-cover"
+                  />
+                )}
+                {item.type === 'video' && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
+                    <Play size={12} className="text-emerald-400 fill-current" />
+                  </div>
+                )}
               </button>
             ))}
           </div>
@@ -614,6 +918,11 @@ export default function PropertyDetailPage() {
                 {property.category === 'commercial' ? 'Commercial Rate' : 'Rent / Price'}
               </span>
               <span className="text-xl font-extrabold text-white block">{formatPrice(property.price)}</span>
+              {property.deposit ? (
+                <span className="text-[11px] text-gray-400 block mt-0.5">
+                  Deposit: {formatPrice(property.deposit)}
+                </span>
+              ) : null}
             </div>
 
             {property.category === 'commercial' || property.type === 'commercial' ? (
@@ -630,7 +939,7 @@ export default function PropertyDetailPage() {
                   <span className="text-xs text-gray-400 block">Bedrooms</span>
                   <span className="text-base font-bold text-white flex items-center space-x-1">
                     <Bed size={18} className="text-emerald-500" />
-                    <span>{property.bedrooms} BHK</span>
+                    <span>{property.bedrooms === 0.5 ? '1 RK' : `${property.bedrooms} BHK`}</span>
                   </span>
                 </div>
               )
@@ -650,7 +959,7 @@ export default function PropertyDetailPage() {
               </div>
             )}
 
-            {property.areaSqFt && (
+            {Boolean(property.areaSqFt && property.areaSqFt > 0) && (
               <div className="space-y-1">
                 <span className="text-xs text-gray-400 block">Super Area</span>
                 <span className="text-base font-bold text-white flex items-center space-x-1">
@@ -660,6 +969,63 @@ export default function PropertyDetailPage() {
               </div>
             )}
           </div>
+
+          {/* Walkthrough Video Tour Section */}
+          {rawVideos.length > 0 && (
+            <div id="property-video-tour" className="bg-[#0a110d] p-4 sm:p-6 rounded-3xl border border-emerald-950/90 shadow-xl space-y-4">
+              <div className="flex items-center justify-between border-b border-emerald-950 pb-3">
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-8 h-8 rounded-lg bg-[#0e261a] border border-emerald-800/80 flex items-center justify-center text-emerald-400 shrink-0">
+                    <Video size={16} />
+                  </div>
+                  <div>
+                    <h3 className="text-base sm:text-lg font-bold text-white flex items-center space-x-2">
+                      <span>Video Walkthrough Tour</span>
+                    </h3>
+                    <p className="text-[11px] text-gray-400">Virtual property walkthrough recorded for this listing</p>
+                  </div>
+                </div>
+
+                <span className="px-2.5 py-1 rounded-full bg-emerald-950 border border-emerald-800/80 text-emerald-400 text-[10px] font-bold uppercase tracking-wider hidden sm:inline-flex items-center space-x-1">
+                  <Sparkles size={11} />
+                  <span>Verified Tour</span>
+                </span>
+              </div>
+
+              <div className="relative rounded-2xl overflow-hidden aspect-video bg-black border border-emerald-900/60 shadow-2xl">
+                {(() => {
+                  const videoUrl = rawVideos[0];
+                  const embedUrl = getYouTubeEmbedUrl(videoUrl);
+
+                  if (embedUrl) {
+                    return (
+                      <iframe
+                        src={embedUrl}
+                        title={`${property.title} Video Tour`}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                        className="w-full h-full border-0"
+                      />
+                    );
+                  }
+
+                  return (
+                    <video
+                      controls
+                      playsInline
+                      preload="metadata"
+                      poster={getVideoPoster(videoUrl)}
+                      className="w-full h-full object-contain bg-black"
+                    >
+                      <source src={videoUrl} type="video/mp4" />
+                      <source src={videoUrl} type="video/webm" />
+                      Your browser does not support video playback.
+                    </video>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
 
           {/* Description */}
           <div className="bg-[#0a110d] p-6 rounded-3xl border border-emerald-950/90 shadow-xl space-y-3 flex flex-col">
@@ -705,46 +1071,139 @@ export default function PropertyDetailPage() {
               </div>
             </div>
 
+            {/* Contact Action Section */}
             <div className="space-y-3">
-              <button
-                type="button"
-                onClick={async () => {
+              {(() => {
+                const isUnlocked = Boolean(
+                  unlockedPhone ||
+                  (property.ownerPhone && property.ownerPhone.length >= 8) ||
+                  user?.role === 'admin' ||
+                  (property.ownerEmail && property.ownerEmail.toLowerCase() === user?.email?.toLowerCase()) ||
+                  (user?.unlockedProperties && (
+                    user.unlockedProperties.includes(property.pid) ||
+                    user.unlockedProperties.includes(property.id) ||
+                    user.unlockedProperties.includes(id)
+                  ))
+                );
+                const displayPhone = unlockedPhone || property.ownerPhone;
+                const cleanPhone = displayPhone ? displayPhone.replace(/\D/g, '') : '';
+
+                if (isUnlocked && displayPhone) {
+                  return (
+                    <div className="space-y-2.5">
+                      <div className="p-3.5 bg-emerald-950/60 border border-emerald-800/80 rounded-2xl text-center space-y-1">
+                        <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider flex items-center justify-center space-x-1">
+                          <ShieldCheck size={14} />
+                          <span>Owner Contact Unlocked</span>
+                        </div>
+                        <div className="text-base font-extrabold text-white font-mono tracking-wide">
+                          {displayPhone}
+                        </div>
+                      </div>
+
+                      <a
+                        href={`tel:${cleanPhone}`}
+                        className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-black rounded-2xl font-extrabold text-xs shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center space-x-2 cursor-pointer active:scale-95"
+                      >
+                        <PhoneCall size={16} />
+                        <span>Direct Call ({displayPhone})</span>
+                      </a>
+
+                      <a
+                        href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Hi, I am interested in your property ${property.pid} (${property.title}) on PROPZY.`)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full py-3 bg-[#0d2a1b] hover:bg-[#123824] text-emerald-400 border border-emerald-800/80 rounded-2xl font-bold text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer active:scale-95"
+                      >
+                        <span>Chat on WhatsApp</span>
+                      </a>
+                    </div>
+                  );
+                }
+
+                if (user?.role === 'owner') {
+                  return (
+                    <div className="p-3 bg-emerald-950/40 border border-emerald-900/60 rounded-2xl text-center">
+                      <p className="text-xs text-gray-300">This property is listed on PROPZY. Inquiries are sent directly to the owner.</p>
+                    </div>
+                  );
+                }
+
+                const handleContactClick = async () => {
                   if (!user) {
                     showToast('Please login to get owner contact');
                     openAuthModal();
                     return;
                   }
 
-                  try {
-                    await fetch('/api/inquiries', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      keepalive: true,
-                      body: JSON.stringify({
-                        propertyId: property.id || property.pid,
-                        propertyTitle: property.title,
-                        propertyPid: property.pid,
-                        tenantName: user.name || 'Interested Tenant',
-                        tenantPhone: user.phone || '',
-                        tenantEmail: user.email || '',
-                        tenantMessage: `Direct contact request for ${property.pid} (${property.title})`,
-                        status: 'New'
-                      })
-                    });
-                  } catch (err) {
-                    console.warn('Inquiry submission error:', err);
+                  if (user.role === 'owner') {
+                    showToast('Inquiry submitted to the owner!');
+                    return;
                   }
 
-                  if (typeof window !== 'undefined') {
-                    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                  const userCredits = typeof user.credits === 'number' ? user.credits : 0;
+                  if (userCredits <= 0 && user.role !== 'admin') {
+                    if (typeof window !== 'undefined') {
+                      window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                    }
+                    showToast('Please purchase a plan to unlock owner contacts.', 'error');
+                    router.push('/plans');
+                    return;
                   }
-                  router.push('/plans');
-                }}
-                className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 text-black rounded-2xl font-bold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center space-x-2 cursor-pointer active:scale-95"
-              >
-                <PhoneCall size={18} />
-                <span>Contact Now</span>
-              </button>
+
+                  setUnlocking(true);
+                  try {
+                    const res = await fetch(`/api/properties/${property.id || property.pid || id}/unlock-contact`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ email: user?.email, userId: user?.id })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                      setUnlockedPhone(data.ownerPhone);
+                      setUnlockedName(data.ownerName);
+                      if (typeof data.remainingCredits === 'number') {
+                        setUser({
+                          ...user,
+                          credits: data.remainingCredits,
+                          unlockedProperties: data.unlockedProperties || [...(user.unlockedProperties || []), property.pid || property.id || id]
+                        });
+                      }
+                      showToast(data.message || 'Contact unlocked successfully!', 'success');
+                    } else if (data.needRecharge) {
+                      showToast(data.message || 'Please recharge your credits.', 'error');
+                      router.push('/plans');
+                    } else {
+                      showToast(data.message || 'Failed to unlock contact.', 'error');
+                    }
+                  } catch (err) {
+                    showToast('Failed to unlock contact. Please try again.', 'error');
+                  } finally {
+                    setUnlocking(false);
+                  }
+                };
+
+                return (
+                  <button
+                    type="button"
+                    disabled={unlocking}
+                    onClick={handleContactClick}
+                    className="w-full py-4 bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-700 text-black rounded-2xl font-extrabold text-xs shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center space-x-2 cursor-pointer active:scale-95"
+                  >
+                    {unlocking ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                        <span>Connecting...</span>
+                      </>
+                    ) : (
+                      <>
+                        <PhoneCall size={16} />
+                        <span>Contact Now</span>
+                      </>
+                    )}
+                  </button>
+                );
+              })()}
             </div>
 
             <div className="p-4 bg-[#06120b] rounded-2xl border border-emerald-950 text-[11px] text-gray-300 space-y-2">
@@ -850,6 +1309,8 @@ export default function PropertyDetailPage() {
           </div>
         </section>
       )}
+
+      </div>
 
       <InquiryModal
         property={showInquiryModal ? property : null}

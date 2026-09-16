@@ -18,11 +18,14 @@ export interface UserProfile {
   email?: string;
   avatar?: string;
   googleId?: string;
-  role: 'tenant' | 'owner' | 'admin';
+  role: 'tenant' | 'owner' | 'admin' | 'sales executive'| string;
   city?: string;
   joinedDate?: string;
   activePlan?: string;
+  credits?: number;
+  planExpiresAt?: string;
   wishlist?: string[];
+  unlockedProperties?: string[];
   ownerVerified?: boolean;
   verificationStatus?: 'none' | 'pending' | 'approved' | 'rejected';
   electricityBillUrl?: string;
@@ -67,6 +70,8 @@ const normalizeWishlistKey = (key: string) => {
   return key;
 };
 
+let toastTimer: ReturnType<typeof setTimeout> | null = null;
+
 export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
@@ -94,10 +99,15 @@ export const useAppStore = create<AppState>()(
         }
       },
 
-      logoutUser: () => {
-        fetch('/api/auth/logout', { method: 'POST' }).catch((err) => console.warn('Logout API error:', err));
-        set({ user: null, wishlist: [] });
-        get().showToast('Logged out successfully');
+      logoutUser: async () => {
+        try {
+          await fetch('/api/auth/logout', { method: 'POST' });
+        } catch (err) {
+          console.warn('Logout API error:', err);
+        } finally {
+          set({ user: null, wishlist: [] });
+          get().showToast('Logged out successfully');
+        }
       },
 
       toggleWishlist: (pidOrId) => {
@@ -139,15 +149,24 @@ export const useAppStore = create<AppState>()(
       closePidModal: () => set({ isPidModalOpen: false }),
 
       showToast: (msg, type) => {
+        if (toastTimer) {
+          clearTimeout(toastTimer);
+          toastTimer = null;
+        }
         set({ toastMessage: msg, toastType: type ?? (isSuccessToast(msg) ? 'success' : 'error') });
-        setTimeout(() => {
-          if (get().toastMessage === msg) {
-            set({ toastMessage: null });
-          }
+        toastTimer = setTimeout(() => {
+          set({ toastMessage: null });
+          toastTimer = null;
         }, 3000);
       },
 
-      clearToast: () => set({ toastMessage: null }),
+      clearToast: () => {
+        if (toastTimer) {
+          clearTimeout(toastTimer);
+          toastTimer = null;
+        }
+        set({ toastMessage: null });
+      },
     }),
     {
       name: STORAGE_KEY,

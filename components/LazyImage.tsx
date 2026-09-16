@@ -7,7 +7,7 @@ import { Image as ImageIcon } from 'lucide-react';
 const loadedImageUrls = new Set<string>();
 
 export function optimizeImageUrl(url: string, width = 600, quality = 70): string {
-  if (!url) return 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=600&q=70';
+  if (!url) return '';
   
   // Base64 strings: return as-is for backward compatibility
   if (url.startsWith('data:image/')) {
@@ -33,7 +33,7 @@ export function optimizeImageUrl(url: string, width = 600, quality = 70): string
 }
 
 interface LazyImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
-  src: string;
+  src?: string;
   alt: string;
   className?: string;
   fallbackSrc?: string;
@@ -41,15 +41,16 @@ interface LazyImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
 }
 
 export const LazyImage: React.FC<LazyImageProps> = ({
-  src,
+  src = '',
   alt,
   className = '',
-  fallbackSrc = 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=600&q=70',
+  fallbackSrc = '',
   objectFit = 'cover',
   ...props
 }) => {
-  const optimizedSrc = optimizeImageUrl(src || fallbackSrc, 600, 70);
-  const optimizedFallback = optimizeImageUrl(fallbackSrc, 600, 70);
+  const targetSrc = src || fallbackSrc;
+  const optimizedSrc = optimizeImageUrl(targetSrc, 600, 70);
+  const optimizedFallback = fallbackSrc ? optimizeImageUrl(fallbackSrc, 600, 70) : '';
 
   const [error, setError] = useState(false);
   const imgSrc = error ? optimizedFallback : optimizedSrc;
@@ -109,6 +110,14 @@ export const LazyImage: React.FC<LazyImageProps> = ({
     }
   }, [isVisible, imgSrc]);
 
+  if (!imgSrc) {
+    return (
+      <div ref={containerRef} className={`relative overflow-hidden bg-[#07110a] flex items-center justify-center ${className}`}>
+        <ImageIcon size={22} className="text-emerald-900/60" />
+      </div>
+    );
+  }
+
   return (
     <div ref={containerRef} className={`relative overflow-hidden bg-[#0d1c14] ${className}`}>
       {/* Skeleton Shimmer Overlay */}
@@ -133,7 +142,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({
             setLoaded(true);
           }}
           className={`w-full h-full ${objectFit === 'contain' ? 'object-contain' : objectFit === 'fill' ? 'object-fill' : 'object-cover'} transition-opacity duration-300 ease-out ${
-            loaded ? 'opacity-100' : 'opacity-0'
+            loaded && !error ? 'opacity-100' : 'opacity-0'
           }`}
           {...props}
         />

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { connectToDatabase } from '@/lib/mongodb';
 import User from '@/models/User';
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
 
     // Helper to generate response with JWT cookie
     const createAuthResponse = async (
-      userPayload: { id: string; name: string; email: string; phone: string; role: 'tenant' | 'owner' | 'admin'; wishlist?: string[] },
+      userPayload: any,
       message: string
     ) => {
       const token = await signJWT({
@@ -34,7 +35,6 @@ export async function POST(req: NextRequest) {
       const response = NextResponse.json({
         success: true,
         message,
-        token,
         user: userPayload
       });
 
@@ -42,14 +42,24 @@ export async function POST(req: NextRequest) {
     };
 
     // 1. Strict configured Admin credentials check
-    if (
-      (cleanInput === adminEmail || cleanInput === 'admin' || cleanInput === 'admin@letsrentz.com') &&
-      password === adminPassword
-    ) {
+    let isAdminMatch = false;
+    if (cleanInput === adminEmail) {
+      if (adminPassword.startsWith('$2a$') || adminPassword.startsWith('$2b$')) {
+        isAdminMatch = await bcrypt.compare(password, adminPassword);
+      } else {
+        const pBuf = Buffer.from(password);
+        const aBuf = Buffer.from(adminPassword);
+        if (pBuf.length === aBuf.length && crypto.timingSafeEqual(pBuf, aBuf)) {
+          isAdminMatch = true;
+        }
+      }
+    }
+
+    if (isAdminMatch) {
       return createAuthResponse({
         id: 'admin-001',
         name: 'Admin Operations',
-        email: cleanInput.includes('@') ? cleanInput : adminEmail,
+        email: adminEmail,
         phone: '+91 99999 00000',
         role: 'admin',
         wishlist: []
@@ -77,20 +87,9 @@ export async function POST(req: NextRequest) {
     // 4. Strictly verify password with bcrypt
     let isMatch = false;
     if (foundUser.password) {
-      const stored = foundUser.password;
+      const stored = String(foundUser.password);
       if (stored.startsWith('$2a$') || stored.startsWith('$2b$') || stored.startsWith('$2y$')) {
         isMatch = await bcrypt.compare(password, stored);
-      } else {
-        // Fallback for legacy plain-text password, if any
-        isMatch = stored === password;
-        if (isMatch) {
-          // Upgrade plain text to bcrypt hash
-          try {
-            const salt = await bcrypt.genSalt(10);
-            foundUser.password = await bcrypt.hash(password, salt);
-            await foundUser.save();
-          } catch (e) {}
-        }
       }
     }
 
@@ -128,13 +127,25 @@ export async function POST(req: NextRequest) {
       } catch (e) {}
     }
 
+
+
     return createAuthResponse({
       id: foundUser._id.toString(),
       name: foundUser.name,
       email: foundUser.email,
       phone: foundUser.phone,
       role: foundUser.role,
-      wishlist: validWishlist
+      city: foundUser.city || 'Mohali',
+      wishlist: validWishlist,
+      unlockedProperties: Array.isArray(foundUser.unlockedProperties) ? foundUser.unlockedProperties : [],
+      ownerVerified: foundUser.ownerVerified || false,
+      verificationStatus: foundUser.verificationStatus || 'none',
+      electricityBillUrl: foundUser.electricityBillUrl || '',
+      consumerNumber: foundUser.consumerNumber || '',
+      credits: typeof foundUser.credits === 'number' ? foundUser.credits : 0,
+      activePlan: foundUser.activePlan || 'Free',
+      planExpiresAt: foundUser.planExpiresAt ? foundUser.planExpiresAt.toISOString() : undefined,
+      billingHistory: Array.isArray(foundUser.billingHistory) ? foundUser.billingHistory : []
     }, `Welcome back, ${foundUser.name}!`);
 
   } catch (error: any) {

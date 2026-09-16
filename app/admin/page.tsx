@@ -5,7 +5,7 @@ import Link from 'next/link';
 import {
   Building, ShieldCheck, MessageSquare, Users, FileText,
   ArrowUpRight, Clock, PlusCircle, CheckCircle2, XCircle, Search, Sparkles, RefreshCw,
-  Trash2, AlertTriangle
+  Trash2, AlertTriangle, ExternalLink
 } from 'lucide-react';
 import { PropertyItem } from '@/lib/seedData';
 import { useApp } from '@/context/AppContext';
@@ -376,10 +376,16 @@ export default function AdminOverviewPage() {
             properties.slice(0, 5).map((item) => {
               const targetId = item.pid || item._id || item.id;
               return (
-                <div key={`queue-m-${targetId}`} className="p-2.5 space-y-2 bg-[#08120c] border border-emerald-900/70 rounded-xl">
+                <div
+                  key={`queue-m-${targetId}`}
+                  onClick={() => window.open(`/properties/${targetId}`, '_blank')}
+                  className="p-2.5 space-y-2 bg-[#08120c] border border-emerald-900/70 hover:border-emerald-500/60 rounded-xl cursor-pointer transition-all active:scale-[0.99] group"
+                  title="Click to view full property listing"
+                >
                   <div className="flex items-center justify-between gap-1">
-                    <span className="font-mono text-emerald-400 font-bold text-[10px] bg-emerald-950 px-1.5 py-0.2 rounded border border-emerald-900">
+                    <span className="font-mono text-emerald-400 font-bold text-[10px] bg-emerald-950 px-1.5 py-0.2 rounded border border-emerald-900 flex items-center gap-1">
                       {item.pid}
+                      <ExternalLink size={9} className="text-emerald-400 opacity-60 group-hover:opacity-100" />
                     </span>
                     <span className="text-[11px] font-bold text-emerald-400">
                       ₹{(item.price || 0).toLocaleString('en-IN')}
@@ -387,16 +393,19 @@ export default function AdminOverviewPage() {
                   </div>
 
                   <div>
-                    <div className="font-bold text-white text-xs line-clamp-1">{item.title}</div>
+                    <div className="font-bold text-white text-xs line-clamp-1 group-hover:text-emerald-400 transition-colors">{item.title}</div>
                     <div className="text-[10px] text-gray-400 mt-0.5">{item.locality}, {item.city}</div>
                   </div>
 
-                  <div className="flex items-center justify-between pt-1 border-t border-emerald-950/70 gap-2">
-                    <span className="text-[10px] font-mono text-gray-400">{item.ownerPhone || '+91 98765 43210'}</span>
+                  <div className="flex items-center justify-between pt-1 border-t border-emerald-950/70 gap-2" onClick={(e) => e.stopPropagation()}>
+                    <span className="text-[10px] font-mono text-gray-400">{item.ownerPhone || 'N/A'}</span>
                     <div className="flex items-center space-x-1.5">
                       <button
                         disabled={Boolean(actionPendingId)}
-                        onClick={() => handleVerifyToggle(targetId, !!item.verified)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleVerifyToggle(targetId, !!item.verified);
+                        }}
                         className={`h-6 px-2 rounded-md text-[9px] font-bold transition-all cursor-pointer whitespace-nowrap ${item.verified
                             ? 'bg-[#180d10] text-rose-300 border border-rose-900/80'
                             : 'bg-emerald-500 text-black font-extrabold'
@@ -406,7 +415,10 @@ export default function AdminOverviewPage() {
                       </button>
                       <button
                         disabled={Boolean(actionPendingId)}
-                        onClick={() => setPropertyPendingDeletion(item)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPropertyPendingDeletion(item);
+                        }}
                         className="h-6 w-6 flex items-center justify-center rounded-md bg-[#180a0a] text-rose-400 border border-rose-950"
                         title="Delete Property"
                       >
@@ -438,51 +450,72 @@ export default function AdminOverviewPage() {
               {properties.length === 0 ? (
                 <TableSkeletonLoader rows={4} cols={7} message="Loading property queue..." />
               ) : (
-                properties.slice(0, 6).map((item) => (
-                  <tr key={item.id || item.pid} className="hover:bg-[#07120a] transition-colors">
-                    <td className="p-3 font-mono font-bold text-emerald-400">{item.pid}</td>
-                    <td className="p-3 font-bold text-white max-w-xs truncate">{item.title}</td>
-                    <td className="p-3 text-gray-300">{(item.locality || '')}, {(item.city || '')}</td>
-                    <td className="p-3 font-bold text-emerald-400">₹{(item.price || 0).toLocaleString('en-IN')}</td>
-                    <td className="p-3 font-mono text-gray-300">{item.ownerPhone || '+91 98765 43210'}</td>
-                    <td className="p-3">
-                      {item.verified ? (
-                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-extrabold">
-                          <CheckCircle2 size={12} />
-                          <span>VERIFIED</span>
+                properties.slice(0, 6).map((item) => {
+                  const targetId = item.pid || item._id || item.id;
+                  return (
+                    <tr
+                      key={item.id || item.pid}
+                      onClick={() => window.open(`/properties/${targetId}`, '_blank')}
+                      className="hover:bg-[#07160d] transition-colors cursor-pointer group"
+                      title="Click to view full property listing"
+                    >
+                      <td className="p-3 font-mono font-bold text-emerald-400 whitespace-nowrap">
+                        <span className="inline-flex items-center gap-1 group-hover:underline">
+                          {item.pid}
+                          <ExternalLink size={10} className="text-emerald-400/60 group-hover:text-emerald-400 transition-colors" />
                         </span>
-                      ) : (
-                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800 text-[10px] font-extrabold">
-                          <Clock size={12} />
-                          <span>PENDING</span>
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-3 text-right">
-                      <div className="flex items-center justify-end space-x-2">
-                        <button
-                          disabled={Boolean(actionPendingId)}
-                          onClick={() => handleVerifyToggle(item.pid || item._id || item.id, !!item.verified)}
-                          className={`px-3 py-1 rounded-xl text-[11px] font-extrabold border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${item.verified
-                            ? 'bg-[#140b0d] text-rose-400 border-rose-900/80 hover:bg-rose-950'
-                            : 'bg-emerald-500 hover:bg-emerald-400 text-black border-emerald-500'
-                            }`}
-                        >
-                          {item.verified ? 'Unverify' : 'Verify Now'}
-                        </button>
+                      </td>
+                      <td className="p-3 font-bold text-white max-w-xs truncate group-hover:text-emerald-300 transition-colors">
+                        {item.title}
+                      </td>
+                      <td className="p-3 text-gray-300">{(item.locality || '')}, {(item.city || '')}</td>
+                      <td className="p-3 font-bold text-emerald-400">₹{(item.price || 0).toLocaleString('en-IN')}</td>
+                      <td className="p-3 font-mono text-gray-300">{item.ownerPhone || 'N/A'}</td>
+                      <td className="p-3">
+                        {item.verified ? (
+                          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[10px] font-extrabold">
+                            <CheckCircle2 size={12} />
+                            <span>VERIFIED</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800 text-[10px] font-extrabold">
+                            <Clock size={12} />
+                            <span>PENDING</span>
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center justify-end space-x-2">
+                          <button
+                            disabled={Boolean(actionPendingId)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleVerifyToggle(targetId, !!item.verified);
+                            }}
+                            className={`px-3 py-1 rounded-xl text-[11px] font-extrabold border transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${item.verified
+                              ? 'bg-[#140b0d] text-rose-400 border-rose-900/80 hover:bg-rose-950'
+                              : 'bg-emerald-500 hover:bg-emerald-400 text-black border-emerald-500'
+                              }`}
+                          >
+                            {item.verified ? 'Unverify' : 'Verify Now'}
+                          </button>
 
-                        <button
-                          disabled={Boolean(actionPendingId)}
-                          onClick={() => setPropertyPendingDeletion(item)}
-                          className="p-1.5 rounded-xl bg-[#140b0d] text-rose-400 hover:text-white hover:bg-rose-600 border border-rose-900/80 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                          title="Delete Property"
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                          <button
+                            disabled={Boolean(actionPendingId)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPropertyPendingDeletion(item);
+                            }}
+                            className="p-1.5 rounded-xl bg-[#140b0d] text-rose-400 hover:text-white hover:bg-rose-600 border border-rose-900/80 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Delete Property"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>

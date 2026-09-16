@@ -8,8 +8,8 @@ export interface PropertyItem {
   city: string;
   locality: string;
   address: string;
-  price: number;
-  deposit?: number;
+  price: number | string;
+  deposit?: number | string;
   bedrooms?: number;
   bathrooms?: number;
   areaSqFt?: number;
@@ -17,6 +17,9 @@ export interface PropertyItem {
   verified: boolean;
   featured: boolean;
   images: string[];
+  videos?: string[];
+  video?: string;
+  videoThumbnail?: string;
   description: string;
   amenities: string[];
   ownerName: string;

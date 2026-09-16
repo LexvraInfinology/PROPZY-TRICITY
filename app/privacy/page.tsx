@@ -34,7 +34,7 @@ export default function PrivacyPolicyPage() {
     {
       id: '6',
       title: '6. User Rights & Data Deletion',
-      content: 'You have full right to update your profile information or request account deletion at any time by contacting support@propzy.com.',
+      content: 'You have full right to update your profile information or request account deletion at any time by contacting propzytricity@gmail.com.',
     },
   ];
 
@@ -75,8 +75,8 @@ export default function PrivacyPolicyPage() {
         <div className="p-6 bg-[#080d09] border border-emerald-900/60 rounded-2xl text-center space-y-2">
           <p className="text-xs text-gray-300">
             For privacy inquiries or data requests, email our Privacy Officer at{' '}
-            <a href="mailto:privacy@propzy.com" className="text-emerald-400 font-bold hover:underline">
-              privacy@propzy.com
+            <a href="mailto:propzytricity@gmail.com" className="text-emerald-400 font-bold hover:underline">
+              propzytricity@gmail.com
             </a>
           </p>
         </div>

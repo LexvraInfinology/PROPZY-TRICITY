@@ -14,31 +14,32 @@ export async function GET(req: NextRequest) {
 
   try {
     await connectToDatabase();
-    const dbInquiries = await Inquiry.find().sort({ createdAt: -1 }).lean();
 
     if (isAdminUser(authUser)) {
+      const dbInquiries = await Inquiry.find().sort({ createdAt: -1 }).lean();
       return NextResponse.json({ success: true, data: dbInquiries || [] });
     }
 
-    const dbUser: any = await User.findOne({ email: normalizeEmail(authUser.email) }).lean();
+    const dbUser: any = await User.findOne({ email: normalizeEmail(authUser.email) }).select('email phone name').lean();
     const currentEmail = normalizeEmail(dbUser?.email || authUser.email);
-    const currentPhone = (dbUser?.phone || '').replace(/\D/g, '');
+    const currentPhone = (dbUser?.phone || '').replace(/\D/g, '').slice(-10);
     const currentName = (dbUser?.name || authUser.name || '').toLowerCase().trim();
 
-    const allInquiries = dbInquiries || [];
-    const visible = allInquiries.filter((inq: any) => {
-      const inquiryEmail = normalizeEmail(inq.tenantEmail);
-      const inquiryPhone = (inq.tenantPhone || '').replace(/\D/g, '');
-      const inquiryName = (inq.tenantName || '').toLowerCase().trim();
+    const orClauses: any[] = [];
+    if (currentEmail) {
+      orClauses.push({ tenantEmail: new RegExp(`^${currentEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') });
+    }
+    if (currentPhone) {
+      orClauses.push({ tenantPhone: new RegExp(`${currentPhone}$`) });
+    }
+    if (currentName) {
+      orClauses.push({ tenantName: new RegExp(`^${currentName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') });
+    }
 
-      return Boolean(
-        (currentEmail && inquiryEmail && inquiryEmail === currentEmail) ||
-        (currentPhone && inquiryPhone && inquiryPhone === currentPhone) ||
-        (currentName && inquiryName && inquiryName === currentName)
-      );
-    });
+    const filter = orClauses.length > 0 ? { $or: orClauses } : { _id: null };
+    const visible = await Inquiry.find(filter).sort({ createdAt: -1 }).lean();
 
-    return NextResponse.json({ success: true, data: visible });
+    return NextResponse.json({ success: true, data: visible || [] });
   } catch (err) {
     console.warn('DB read error for inquiries:', err);
     return NextResponse.json({ success: true, data: [] });

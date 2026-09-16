@@ -104,6 +104,25 @@ export function isRedisAvailable(): boolean {
 }
 
 /**
+ * Performs an active Redis PING health check.
+ */
+export async function checkRedisHealth(): Promise<{ ok: boolean; message: string }> {
+  try {
+    const client = getRedisClient();
+    if (!client) {
+      return { ok: false, message: 'Redis client not initialized (in-memory fallback active).' };
+    }
+    const pingRes = await client.ping();
+    if (pingRes === 'PONG') {
+      return { ok: true, message: 'Redis is online and responding to PING.' };
+    }
+    return { ok: false, message: `Unexpected Redis response: ${pingRes}` };
+  } catch (err: any) {
+    return { ok: false, message: `Redis healthcheck error: ${err?.message}` };
+  }
+}
+
+/**
  * Gets and parses JSON value from Redis.
  */
 export async function redisGet<T>(key: string): Promise<T | null> {

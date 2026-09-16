@@ -75,8 +75,8 @@ export default function TermsOfUsePage() {
         <div className="p-6 bg-[#080d09] border border-emerald-900/60 rounded-2xl text-center space-y-2">
           <p className="text-xs text-gray-300">
             Have questions regarding our legal terms? Reach out to our team at{' '}
-            <a href="mailto:support@propzy.com" className="text-emerald-400 font-bold hover:underline">
-              support@propzy.com
+            <a href="mailto:propzytricity@gmail.com" className="text-emerald-400 font-bold hover:underline">
+              propzytricity@gmail.com
             </a>
           </p>
         </div>

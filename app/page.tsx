@@ -82,11 +82,12 @@ export default function HomePage() {
     async function fetchProperties() {
       const cached = getClientPropertiesCache('home_featured');
       if (cached && cached.data && cached.data.length > 0) {
-        setProperties(cached.data);
+        const activeCached = cached.data.filter((p: any) => p.available !== false);
+        setProperties(activeCached);
         if (typeof cached.pagination?.total === 'number') {
           setTotalPropertiesCount(cached.pagination.total);
         } else {
-          setTotalPropertiesCount(cached.data.length);
+          setTotalPropertiesCount(activeCached.length);
         }
         setLoading(false);
       }
@@ -95,10 +96,11 @@ export default function HomePage() {
         const res = await fetch('/api/properties?includeTotal=true');
         const data = await res.json();
         if (data.success && data.data && data.data.length > 0) {
-          setProperties(data.data);
-          const total = typeof data.pagination?.total === 'number' ? data.pagination.total : data.data.length;
+          const activeProperties = data.data.filter((p: any) => p.available !== false);
+          setProperties(activeProperties);
+          const total = typeof data.pagination?.total === 'number' ? data.pagination.total : activeProperties.length;
           setTotalPropertiesCount(total);
-          setClientPropertiesCache('home_featured', data.data, data.pagination);
+          setClientPropertiesCache('home_featured', activeProperties, data.pagination);
         }
       } catch (e) {
         console.warn('Properties fetch error:', e);
@@ -117,26 +119,36 @@ export default function HomePage() {
       window.history.scrollRestoration = 'manual';
     }
 
-    const targetSectionId = sessionStorage.getItem('home_scroll_target');
+    const savedPid = sessionStorage.getItem('home_scroll_pid');
     const savedY = sessionStorage.getItem('home_scroll_y');
+    const targetSectionId = sessionStorage.getItem('home_scroll_target');
     const savedCity = sessionStorage.getItem('home_active_city');
 
     if (savedCity) {
       setActiveCategoryCity(savedCity);
     }
 
-    if (targetSectionId || savedY) {
+    if (savedPid || savedY || targetSectionId) {
       const applyScroll = () => {
-        if (targetSectionId) {
-          const el = document.getElementById(targetSectionId);
+        if (savedPid) {
+          const el = document.getElementById(`prop-card-${savedPid}`);
           if (el) {
-            el.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'start' });
-            return;
+            el.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'center' });
+            return true;
           }
         }
         if (savedY && Number(savedY) > 0) {
           window.scrollTo({ top: Number(savedY), behavior: 'instant' });
+          return true;
         }
+        if (targetSectionId) {
+          const el = document.getElementById(targetSectionId);
+          if (el) {
+            el.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'start' });
+            return true;
+          }
+        }
+        return false;
       };
 
       // 1. Execute synchronously before paint
@@ -146,9 +158,10 @@ export default function HomePage() {
       const raf = requestAnimationFrame(applyScroll);
       const timer = setTimeout(() => {
         applyScroll();
-        sessionStorage.removeItem('home_scroll_target');
+        sessionStorage.removeItem('home_scroll_pid');
         sessionStorage.removeItem('home_scroll_y');
-      }, 100);
+        sessionStorage.removeItem('home_scroll_target');
+      }, 150);
 
       return () => {
         cancelAnimationFrame(raf);
@@ -156,6 +169,42 @@ export default function HomePage() {
       };
     }
   }, []);
+
+  // Ensure restoration if properties loaded asynchronously after mount
+  useEffect(() => {
+    if (loading || properties.length === 0) return;
+    if (typeof window === 'undefined') return;
+
+    const savedPid = sessionStorage.getItem('home_scroll_pid');
+    const savedY = sessionStorage.getItem('home_scroll_y');
+
+    if (!savedPid && !savedY) return;
+
+    const restore = () => {
+      if (savedPid) {
+        const el = document.getElementById(`prop-card-${savedPid}`);
+        if (el) {
+          el.scrollIntoView({ behavior: 'instant' as ScrollBehavior, block: 'center' });
+          sessionStorage.removeItem('home_scroll_pid');
+          sessionStorage.removeItem('home_scroll_y');
+          sessionStorage.removeItem('home_scroll_target');
+          return true;
+        }
+      }
+      if (savedY && Number(savedY) > 0) {
+        window.scrollTo({ top: Number(savedY), behavior: 'instant' });
+        sessionStorage.removeItem('home_scroll_pid');
+        sessionStorage.removeItem('home_scroll_y');
+        sessionStorage.removeItem('home_scroll_target');
+        return true;
+      }
+      return false;
+    };
+
+    restore();
+    const raf = requestAnimationFrame(restore);
+    return () => cancelAnimationFrame(raf);
+  }, [loading, properties]);
 
   const handleCityNavigation = (cityName: string) => {
     if (typeof window !== 'undefined') {
@@ -218,6 +267,7 @@ export default function HomePage() {
             alt="Hero Background"
             fill
             priority
+            unoptimized
             className="object-cover object-center opacity-75"
           />
         </div>
@@ -297,11 +347,11 @@ export default function HomePage() {
                   onChange={(e) => setPropertyType(e.target.value)}
                   className="bg-transparent text-xs font-bold text-white focus:outline-none cursor-pointer"
                 >
-                  <option value="all" className="bg-[#0a110d] text-white">All Type</option>
-                  <option value="flat" className="bg-[#0a110d] text-white">Flat / Apartment</option>
-                  <option value="house" className="bg-[#0a110d] text-white">House / Villa</option>
-                  <option value="pg" className="bg-[#0a110d] text-white">PG / Hostel</option>
-                  <option value="commercial" className="bg-[#0a110d] text-white">Commercial Space</option>
+                  <option value="all" className="bg-[#0a110d] text-white">All Types</option>
+                  <option value="flat" className="bg-[#0a110d] text-white">Flat</option>
+                  <option value="house" className="bg-[#0a110d] text-white">House</option>
+                  <option value="pg" className="bg-[#0a110d] text-white">PG</option>
+                  <option value="commercial" className="bg-[#0a110d] text-white">Commercial</option>
                 </select>
               </div>
 
@@ -734,7 +784,7 @@ export default function HomePage() {
             </div>
 
             <h2 className="text-xl sm:text-5xl font-extrabold text-white tracking-tight leading-tight">
-              Everything <br />
+              Everything 
               handled, <br />
               <span className="font-serif italic text-emerald-400 font-normal">hassle free.</span>
             </h2>
@@ -744,8 +794,8 @@ export default function HomePage() {
             </p>
           </div>
 
-          {/* Right 3 Cards Grid */}
-          <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {/* Right 2 Cards Grid */}
+          <div className="lg:col-span-8 grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Service 1 */}
             <Link href="/properties" className="bg-[#080d0a] border border-emerald-950/90 hover:border-emerald-800/60 rounded-3xl p-6 space-y-4 group transition-all">
               <div className="w-12 h-12 rounded-2xl bg-[#0e1a13] border border-emerald-900/60 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
@@ -760,19 +810,6 @@ export default function HomePage() {
             </Link>
 
             {/* Service 2 */}
-            <div className="bg-[#080d0a] border border-emerald-950/90 hover:border-emerald-800/60 rounded-3xl p-6 space-y-4 group transition-all cursor-pointer">
-              <div className="w-12 h-12 rounded-2xl bg-[#0e1a13] border border-emerald-900/60 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
-                <ShieldCheck size={22} />
-              </div>
-              <h3 className="text-base font-bold text-white group-hover:text-emerald-400 transition-colors">
-                Police Verification
-              </h3>
-              <p className="text-xs text-gray-400 leading-relaxed">
-                Complete police verification for a safe and secure stay.
-              </p>
-            </div>
-
-            {/* Service 3 */}
             <Link href="/localities" className="bg-[#080d0a] border border-emerald-950/90 hover:border-emerald-800/60 rounded-3xl p-6 space-y-4 group transition-all">
               <div className="w-12 h-12 rounded-2xl bg-[#0e1a13] border border-emerald-900/60 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
                 <MapPin size={22} />

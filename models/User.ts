@@ -1,6 +1,18 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 
+export interface IBillingRecord {
+  invoiceNo: string;
+  planName: string;
+  amount: number;
+  date: string;
+  status: 'Paid' | 'Pending' | 'Failed';
+  paymentMethod: string;
+  orderId?: string;
+  paymentId?: string;
+  credits?: number;
+}
+
 export interface IUser extends Document {
   name: string;
   email: string;
@@ -8,13 +20,18 @@ export interface IUser extends Document {
   password?: string;
   googleId?: string;
   avatar?: string;
-  role: 'tenant' | 'owner' | 'admin';
+  role: 'tenant' | 'owner' | 'admin' | 'sales executive' | string;
   city?: string;
   wishlist?: string[];
+  unlockedProperties?: string[];
   ownerVerified?: boolean;
   verificationStatus?: 'none' | 'pending' | 'approved' | 'rejected';
   electricityBillUrl?: string;
   consumerNumber?: string;
+  credits?: number;
+  activePlan?: string;
+  planExpiresAt?: Date;
+  billingHistory?: IBillingRecord[];
   createdAt: Date;
   comparePassword(candidatePassword: string): Promise<boolean>;
 }
@@ -28,12 +45,13 @@ const UserSchema: Schema = new Schema({
   avatar: { type: String, default: '' },
   role: { 
     type: String, 
-    enum: ['tenant', 'owner', 'admin'], 
+    enum: ['tenant', 'owner', 'admin', 'sales executive', 'sales_executive'], 
     default: 'tenant',
     required: true 
   },
   city: { type: String, default: 'Mohali' },
   wishlist: { type: [String], default: [] },
+  unlockedProperties: { type: [String], default: [] },
   ownerVerified: { type: Boolean, default: false },
   verificationStatus: { 
     type: String, 
@@ -42,8 +60,18 @@ const UserSchema: Schema = new Schema({
   },
   electricityBillUrl: { type: String, default: '' },
   consumerNumber: { type: String, default: '' },
+  credits: { type: Number, default: 0 },
+  activePlan: { type: String, default: 'Free' },
+  planExpiresAt: { type: Date, default: null },
+  billingHistory: { type: Array, default: [] },
   createdAt: { type: Date, default: Date.now }
 }, { autoIndex: false });
+
+// Query & Filter performance indexes
+UserSchema.index({ phone: 1 });
+UserSchema.index({ verificationStatus: 1, createdAt: -1 });
+UserSchema.index({ 'billingHistory.orderId': 1 });
+UserSchema.index({ 'billingHistory.paymentId': 1 });
 
 UserSchema.pre<IUser>('save', async function (next) {
   if (!this.isModified('password') || !this.password) {
@@ -70,8 +98,7 @@ UserSchema.methods.comparePassword = async function (this: IUser, candidatePassw
   if (pass.startsWith('$2a$') || pass.startsWith('$2b$') || pass.startsWith('$2y$')) {
     return await bcrypt.compare(candidatePassword, pass);
   }
-  // Fallback for legacy plain-text passwords in database
-  return pass === candidatePassword;
+  return false;
 };
 
 export default mongoose.models.User || mongoose.model<IUser>('User', UserSchema);

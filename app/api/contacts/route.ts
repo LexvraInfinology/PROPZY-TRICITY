@@ -14,17 +14,19 @@ export async function GET(req: NextRequest) {
 
   try {
     await connectToDatabase();
-    // Return only actual records stored in MongoDB ContactMessage collection
-    const dbMessages = await ContactMessage.find().sort({ createdAt: -1 }).lean();
-
+    
     if (isAdminUser(authUser)) {
-      return NextResponse.json({ success: true, data: dbMessages });
+      const dbMessages = await ContactMessage.find().sort({ createdAt: -1 }).lean();
+      return NextResponse.json({ success: true, data: dbMessages || [] });
     }
 
-    // Regular users see only their own contact submissions
+    // Regular users see only their own contact submissions directly via indexed workEmail query
     const userEmail = (authUser.email || '').toLowerCase().trim();
-    const userMessages = dbMessages.filter((m: any) => (m.workEmail || '').toLowerCase().trim() === userEmail);
-    return NextResponse.json({ success: true, data: userMessages });
+    const userMessages = await ContactMessage.find({
+      workEmail: new RegExp(`^${userEmail.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i')
+    }).sort({ createdAt: -1 }).lean();
+
+    return NextResponse.json({ success: true, data: userMessages || [] });
   } catch (err: any) {
     console.error('MongoDB contacts GET error:', err);
     return NextResponse.json({ success: false, message: 'Failed to retrieve contact messages', data: [] }, { status: 500 });

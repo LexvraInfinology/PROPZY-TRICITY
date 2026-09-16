@@ -61,10 +61,11 @@ export async function POST(req: NextRequest) {
     }
 
     const timestamp = Math.round(new Date().getTime() / 1000);
-    const folder = 'letsrentz/properties';
+    const resourceType = requestBody?.resourceType === 'video' ? 'video' : 'image';
+    const folder = resourceType === 'video' ? 'letsrentz/videos' : 'letsrentz/properties';
 
     // Parameters to sign must match exactly the parameters sent in the upload request
-    const paramsToSign = {
+    const paramsToSign: Record<string, string | number> = {
       folder,
       timestamp,
     };
@@ -79,6 +80,7 @@ export async function POST(req: NextRequest) {
       apiKey,
       cloudName,
       folder,
+      resourceType,
     });
   } catch (error: any) {
     console.warn('Notice: Cloudinary upload signature bypassed, using local fallback:', error?.message);

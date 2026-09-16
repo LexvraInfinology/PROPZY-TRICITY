@@ -19,6 +19,8 @@ When deploying to any cloud platform (e.g., Vercel, Netlify, Railway), configure
 | `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` | Yes | Cloudinary Cloud Name for client direct uploads | `your_cloudinary_cloud_name` |
 | `CLOUDINARY_API_KEY` | Yes | Cloudinary API Key for generating upload signatures | `123456789012345` |
 | `CLOUDINARY_API_SECRET` | Yes | Cloudinary API Secret for secure backend operations | `abcdefghijklmnopqrstuvwxyz0123` |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Yes | Google OAuth 2.0 Web Client ID | `78772276826-...apps.googleusercontent.com` |
+| `GOOGLE_CLIENT_SECRET` | Yes | Google OAuth 2.0 Client Secret | `GOCSPX-...` |
 
 ---
 

@@ -8,8 +8,8 @@ export interface IProperty extends Document {
   city: string;
   locality: string;
   address: string;
-  price: number;
-  deposit?: number;
+  price: number | string;
+  deposit?: number | string;
   bedrooms?: number;
   bathrooms?: number;
   areaSqFt?: number;
@@ -17,6 +17,8 @@ export interface IProperty extends Document {
   verified: boolean;
   featured: boolean;
   images: string[];
+  videos?: string[];
+  videoThumbnail?: string;
   description: string;
   amenities: string[];
   ownerName: string;
@@ -43,11 +45,11 @@ const PropertySchema: Schema = new Schema({
   city: { type: String, required: true },
   locality: { type: String, required: true, index: true },
   address: { type: String, required: true },
-  price: { type: Number, required: true },
-  deposit: { type: Number, default: 0 },
+  price: { type: Schema.Types.Mixed, required: true },
+  deposit: { type: Schema.Types.Mixed, default: 0 },
   bedrooms: { type: Number, default: 1 },
   bathrooms: { type: Number, default: 1 },
-  areaSqFt: { type: Number, default: 500 },
+  areaSqFt: { type: Number },
   furnishing: { 
     type: String, 
     enum: ['unfurnished', 'semi-furnished', 'fully-furnished'], 
@@ -56,6 +58,8 @@ const PropertySchema: Schema = new Schema({
   verified: { type: Boolean, default: false },
   featured: { type: Boolean, default: false },
   images: [{ type: String }],
+  videos: [{ type: String }],
+  videoThumbnail: { type: String, default: '' },
   description: { type: String, required: true },
   amenities: [{ type: String }],
   ownerName: { type: String, required: true },

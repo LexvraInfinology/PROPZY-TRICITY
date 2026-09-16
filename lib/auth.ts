@@ -5,16 +5,22 @@ export interface JWTPayload {
   id: string;
   name: string;
   email: string;
-  role: 'tenant' | 'owner' | 'admin';
+  role: 'tenant' | 'owner' | 'admin' | 'sales executive'| string;
   [key: string]: any;
 }
 
+const jwtSecret = process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET;
+if (!jwtSecret && process.env.NODE_ENV === 'production') {
+  console.error('[SECURITY WARNING] Neither JWT_SECRET nor NEXTAUTH_SECRET is configured. Set this in production!');
+}
+
 const SECRET_KEY = new TextEncoder().encode(
-  process.env.JWT_SECRET || process.env.NEXTAUTH_SECRET || 'propzy-secret-jwt-key-2026-super-secure'
+  jwtSecret || 'propzy-secret-jwt-key-2026-super-secure'
 );
 
-
 export const AUTH_COOKIE_NAME = 'propzy_token';
+
+const isProductionOrHttps = process.env.NODE_ENV === 'production' || Boolean(process.env.NEXT_PUBLIC_APP_URL?.startsWith('https://'));
 
 export async function signJWT(payload: JWTPayload): Promise<string> {
   return new SignJWT({ ...payload })
@@ -41,11 +47,11 @@ export async function getAuthUser(req: NextRequest): Promise<JWTPayload | null> 
     if (user) return user;
   }
 
-  // 2. Check Authorization Header (Bearer <token>)
+  // 2. Check Authorization Header (Bearer token fallback for API consumers)
   const authHeader = req.headers.get('authorization');
   if (authHeader && authHeader.startsWith('Bearer ')) {
-    const bearerToken = authHeader.substring(7);
-    const user = await verifyJWT(bearerToken);
+    const token = authHeader.substring(7).trim();
+    const user = await verifyJWT(token);
     if (user) return user;
   }
 
@@ -57,7 +63,7 @@ export function setAuthCookie(response: NextResponse, token: string): NextRespon
     name: AUTH_COOKIE_NAME,
     value: token,
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProductionOrHttps,
     sameSite: 'lax',
     path: '/',
     maxAge: 60 * 60 * 24 * 7, // 7 days
@@ -70,7 +76,7 @@ export function clearAuthCookie(response: NextResponse): NextResponse {
     name: AUTH_COOKIE_NAME,
     value: '',
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
+    secure: isProductionOrHttps,
     sameSite: 'lax',
     path: '/',
     maxAge: 0,

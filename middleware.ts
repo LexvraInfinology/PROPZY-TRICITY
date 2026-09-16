@@ -13,16 +13,18 @@ export async function middleware(req: NextRequest) {
   if (pathname.startsWith('/admin') && pathname !== '/admin/login') {
     const cookieToken = req.cookies.get(AUTH_COOKIE_NAME)?.value;
 
-    if (cookieToken) {
-      try {
-        const verified = await jwtVerify(cookieToken, SECRET_KEY);
-        const authUser: any = verified.payload;
-        if (authUser && authUser.role !== 'admin') {
-          return NextResponse.redirect(new URL('/admin/login', req.url));
-        }
-      } catch (err) {
-        // Allow client hydration to proceed if token verification encounters an edge error
+    if (!cookieToken) {
+      return NextResponse.redirect(new URL('/admin/login', req.url));
+    }
+
+    try {
+      const verified = await jwtVerify(cookieToken, SECRET_KEY);
+      const authUser: any = verified.payload;
+      if (!authUser || authUser.role !== 'admin') {
+        return NextResponse.redirect(new URL('/admin/login', req.url));
       }
+    } catch (err) {
+      return NextResponse.redirect(new URL('/admin/login', req.url));
     }
   }
 

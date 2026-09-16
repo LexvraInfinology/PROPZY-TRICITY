@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Heart, User, Building, PhoneCall, ShieldCheck, CheckCircle2,
   XCircle, RefreshCw, CreditCard, Sparkles, FileText, Download, Check, Edit3, Save, AlertTriangle, Upload,
-  Phone, Mail, X
+  Phone, Mail, X, Home, MapPin, Printer, Zap, Calendar
 } from 'lucide-react';
 
 import { useApp, UserProfile, BillingRecord } from '@/context/AppContext';
@@ -15,6 +15,7 @@ import { PropertyCard } from '@/components/PropertyCard';
 import { LazyImage } from '@/components/LazyImage';
 import { BrandSpinner } from '@/components/Loader';
 import { sanitizeName, sanitizePhone, isValidName, isValidPhone, isValidEmail, isValidElectricityBillDocument, isValidHttpUrl } from '@/lib/validation';
+import { initiateRazorpaySubscription } from '@/lib/razorpayClient';
 
 
 interface InquiryItem {
@@ -24,6 +25,7 @@ interface InquiryItem {
   propertyPid: string;
   tenantName: string;
   tenantPhone: string;
+  tenantEmail?: string;
   tenantMessage?: string;
   status: string;
   createdAt?: string;
@@ -41,6 +43,44 @@ function DashboardContent() {
   const [inquiries, setInquiries] = useState<InquiryItem[]>([]);
   const [allProperties, setAllProperties] = useState<PropertyItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [processingPlan, setProcessingPlan] = useState<string | null>(null);
+
+  const handleSubscribeToPlan = async (planName: string, amount: number) => {
+    if (!user) {
+      showToast(`Please login to subscribe to the ${planName}`, 'error');
+      openAuthModal();
+      return;
+    }
+
+    setProcessingPlan(planName);
+    showToast(`Initializing Razorpay payment for ${planName} (₹${amount})...`);
+
+    await initiateRazorpaySubscription({
+      planName,
+      amount,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone
+      },
+      onSuccess: ({ user: updatedUser, message }) => {
+        setProcessingPlan(null);
+        if (updatedUser) {
+          setUser(updatedUser);
+        }
+        showToast(message || ` Successfully subscribed to ${planName}!`, 'success');
+      },
+      onError: (errorMsg) => {
+        setProcessingPlan(null);
+        showToast(errorMsg || 'Payment failed. Please try again.', 'error');
+      },
+      onDismiss: () => {
+        setProcessingPlan(null);
+        showToast('Payment window closed.', 'error');
+      }
+    });
+  };
 
   // Account Edit Form State
   const [isEditingAccount, setIsEditingAccount] = useState(false);
@@ -177,18 +217,29 @@ function DashboardContent() {
 
   useEffect(() => {
     if (tabParam) {
-      setActiveTab(tabParam);
+      if (user?.role === 'owner' && (tabParam === 'billing' || tabParam === 'explore-plans')) {
+        setActiveTab('account');
+      } else if (user?.role === 'tenant' && tabParam === 'inquiries') {
+        setActiveTab('account');
+      } else {
+        setActiveTab(tabParam);
+      }
     }
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     }
-  }, [tabParam]);
+  }, [tabParam, user?.role]);
 
   useEffect(() => {
+    if (user?.role === 'owner' && (activeTab === 'billing' || activeTab === 'explore-plans')) {
+      setActiveTab('account');
+    } else if (user?.role === 'tenant' && activeTab === 'inquiries') {
+      setActiveTab('account');
+    }
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     }
-  }, [activeTab]);
+  }, [activeTab, user?.role]);
 
   useEffect(() => {
     if (user && user.role === 'admin') {
@@ -205,20 +256,28 @@ function DashboardContent() {
       .then((res) => res.json())
       .then((data) => {
         if (!active || !data.success || !data.user) return;
-
-        const displayedEmail = user?.email?.toLowerCase().trim();
-        const sessionEmail = data.user.email?.toLowerCase().trim();
-        if (displayedEmail && sessionEmail && displayedEmail !== sessionEmail) {
-          setUser(data.user);
-          showToast('Your dashboard was updated to match the active signed-in account.');
-        }
+        setUser(data.user);
       })
       .catch(() => {});
 
     return () => {
       active = false;
     };
-  }, [setUser, showToast, user?.email]);
+  }, [setUser]);
+
+  // Auto-sync Pawan Kumar role to sales executive
+  useEffect(() => {
+    if (user?.email && user.email.toLowerCase().trim() === 'pawanpropzy@gmail.com') {
+      if (user.role !== 'sales executive') {
+        setUser({
+          ...user,
+          role: 'sales executive' as any,
+          ownerVerified: true,
+          verificationStatus: 'approved'
+        });
+      }
+    }
+  }, [user, setUser]);
 
   useEffect(() => {
     if (user) {
@@ -350,6 +409,33 @@ function DashboardContent() {
     return false;
   });
 
+  const handleToggleAvailability = async (prop: PropertyItem) => {
+    const targetId = prop.id || prop.pid || (prop as any)._id;
+    const currentAvailable = prop.available !== false;
+    const newAvailable = !currentAvailable;
+
+    // Optimistically update local state
+    setAllProperties(prev => prev.map(p => (p.id === targetId || p.pid === targetId || (p as any)._id === targetId) ? { ...p, available: newAvailable } : p));
+
+    try {
+      const res = await fetch(`/api/properties/${targetId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ available: newAvailable })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(newAvailable ? `Listing ${prop.pid} is now Active (Visible in public listings)` : `Listing ${prop.pid} is now Inactive (Hidden from public listings)`, 'success');
+      } else {
+        throw new Error(data.message || 'Failed to update active status');
+      }
+    } catch (err: any) {
+      // Revert optimistic update
+      setAllProperties(prev => prev.map(p => (p.id === targetId || p.pid === targetId || (p as any)._id === targetId) ? { ...p, available: currentAvailable } : p));
+      showToast(err.message || 'Failed to update active status', 'error');
+    }
+  };
+
   const handleAccountFormSave = (e: React.FormEvent) => {
 
     e.preventDefault();
@@ -376,7 +462,7 @@ function DashboardContent() {
       phone: accountForm.phone.trim(),
       email: accountForm.email,
       city: accountForm.city,
-      role: accountForm.role as 'tenant' | 'owner' | 'admin'
+      role: (accountForm.role as any) || user.role
     };
 
     setUser(updatedUser);
@@ -498,27 +584,78 @@ function DashboardContent() {
     );
   }
 
+  const isPawanPropzy = Boolean(
+    (user?.email && user.email.toLowerCase().trim() === 'pawanpropzy@gmail.com') ||
+    user?.role === 'sales executive' ||
+    user?.role === 'sales_executive'
+  );
+
+  const roleDisplayName = isPawanPropzy
+    ? 'Sales Executive'
+    : user?.role === 'owner'
+    ? 'Property Owner'
+    : user?.role === 'admin'
+    ? 'Admin'
+    : 'Tenant Account';
+
+  const roleBadgeName = isPawanPropzy
+    ? 'Sales Executive'
+    : user?.role === 'owner'
+    ? 'Owner'
+    : user?.role === 'admin'
+    ? 'Admin'
+    : 'Tenant';
+
   return (
     <div className="bg-[#050806] text-gray-100 min-h-screen">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
         {/* User Profile Header Card */}
-        <div className="bg-[#0a110d] rounded-3xl border border-emerald-950/90 p-6 sm:p-8 shadow-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+        <div className="bg-[#0a110d] rounded-3xl border border-emerald-950/90 p-6 sm:p-8 shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           <div className="flex items-center space-x-5">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-emerald-500 text-black font-extrabold text-2xl sm:text-3xl flex items-center justify-center shadow-lg shadow-emerald-500/20">
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-emerald-500 text-black font-extrabold text-2xl sm:text-3xl flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0">
               {user.name.charAt(0)}
             </div>
-            <div>
-              <div className="flex items-center space-x-2">
+            <div className="space-y-1.5">
+              <div className="flex items-center space-x-2 flex-wrap gap-y-1.5">
                 <h2 className="text-xl sm:text-2xl font-extrabold text-white">{user.name}</h2>
-                <span className="text-[10px] uppercase font-bold bg-[#092618] text-emerald-400 border border-emerald-800/80 px-2.5 py-0.5 rounded-full">
-                  {user.role}
+                <span className={`text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full ${
+                  isPawanPropzy
+                    ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-black font-extrabold shadow-md'
+                    : 'bg-[#092618] text-emerald-400 border border-emerald-800/80'
+                }`}>
+                  {roleBadgeName}
                 </span>
+
+                {user.role !== 'owner' && (
+                  <span className="inline-flex items-center space-x-1.5 text-[10px] font-extrabold px-3 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border border-amber-500/50 text-amber-300 shadow-sm">
+                    <Sparkles size={11} className="text-amber-400" />
+                    <span>{user.activePlan || 'Standard Plan'}</span>
+                  </span>
+                )}
+
+                {user.role !== 'owner' && (
+                  <span className="inline-flex items-center space-x-1.5 text-[10px] font-extrabold px-3 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-700/60 text-emerald-300 shadow-sm">
+                    <Zap size={11} className="text-emerald-400 fill-emerald-400" />
+                    <span>{user.credits ?? 0} Credits</span>
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-gray-400 font-mono mt-0.5">{user.phone} {user.email ? `• ${user.email}` : ''}</p>
+              <p className="text-xs text-gray-400 font-mono">{user.phone} {user.email ? `• ${user.email}` : ''}</p>
             </div>
           </div>
 
-          <div className="flex items-center space-x-3 w-full sm:w-auto">
+          <div className="flex items-center space-x-3 w-full lg:w-auto">
+            {user.role !== 'owner' && (
+              <button
+                type="button"
+                onClick={() => handleTabChange('explore-plans')}
+                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-black rounded-full text-xs font-black transition-all flex items-center justify-center space-x-1.5 shadow-lg shadow-amber-500/20 cursor-pointer active:scale-95"
+              >
+                <Sparkles size={14} className="stroke-[2.5]" />
+                <span>Get Credits / Upgrade</span>
+              </button>
+            )}
+
             <button
               onClick={handleManualRefresh}
               disabled={refreshing}
@@ -533,7 +670,7 @@ function DashboardContent() {
                 logoutUser();
                 router.replace('/');
               }}
-              className="w-full sm:w-auto px-5 py-2.5 bg-[#140808] hover:bg-red-950/60 text-red-400 border border-red-900/60 rounded-full text-xs font-bold transition-all"
+              className="w-full sm:w-auto px-5 py-2.5 bg-[#140808] hover:bg-red-950/60 text-red-400 border border-red-900/60 rounded-full text-xs font-bold transition-all cursor-pointer"
             >
               Log Out
             </button>
@@ -577,16 +714,18 @@ function DashboardContent() {
             <span>Saved Property ({savedProperties.length})</span>
           </button>
 
-          <button
-            onClick={() => handleTabChange('billing')}
-            className={`pb-3.5 cursor-pointer border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${activeTab === 'billing'
-                ? 'border-emerald-400 text-emerald-400 font-bold'
-                : 'border-transparent text-gray-400 hover:text-white'
-              }`}
-          >
-            <CreditCard size={16} />
-            <span>Billing History</span>
-          </button>
+          {user?.role !== 'owner' && (
+            <button
+              onClick={() => handleTabChange('billing')}
+              className={`pb-3.5 cursor-pointer border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${activeTab === 'billing'
+                  ? 'border-emerald-400 text-emerald-400 font-bold'
+                  : 'border-transparent text-gray-400 hover:text-white'
+                }`}
+            >
+              <CreditCard size={16} />
+              <span>Billing History</span>
+            </button>
+          )}
 
           {user?.role !== 'owner' && (
             <button
@@ -601,61 +740,181 @@ function DashboardContent() {
             </button>
           )}
 
-          <button
-            onClick={() => handleTabChange('inquiries')}
-            className={`pb-3.5 border-b-2 cursor-pointer flex items-center space-x-2 whitespace-nowrap transition-all ${activeTab === 'inquiries'
-                ? 'border-emerald-400 text-emerald-400 font-bold'
-                : 'border-transparent text-gray-400 hover:text-white'
-              }`}
-          >
-            <PhoneCall size={16} />
-            <span>Inquiries ({myInquiries.length})</span>
-          </button>
+          {user?.role === 'owner' && (
+            <button
+              onClick={() => handleTabChange('inquiries')}
+              className={`pb-3.5 border-b-2 cursor-pointer flex items-center space-x-2 whitespace-nowrap transition-all ${activeTab === 'inquiries'
+                  ? 'border-emerald-400 text-emerald-400 font-bold'
+                  : 'border-transparent text-gray-400 hover:text-white'
+                }`}
+            >
+              <PhoneCall size={16} />
+              <span>Inquiries ({myInquiries.length})</span>
+            </button>
+          )}
         </div>
 
         {/* TAB 1: ACCOUNT PROFILE */}
         {activeTab === 'account' && (
-          <div className="bg-[#0a110d] rounded-3xl border border-emerald-950/90 p-5 sm:p-8 shadow-xl space-y-6">
-            {/* Header with Avatar and Action */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-emerald-950 pb-5">
-              <div className="flex items-center space-x-3.5">
-                <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-emerald-400 text-black font-extrabold text-lg flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0 uppercase">
-                  {user.name ? user.name[0] : 'U'}
-                </div>
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <h3 className="text-lg font-extrabold text-white tracking-tight">{user.name}</h3>
-                    <span className="text-[10px] bg-emerald-950/80 border border-emerald-800/80 text-emerald-400 font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
-                      {user.role === 'owner' ? 'Owner' : 'Tenant'}
-                    </span>
+          <div className="space-y-6">
+            {/* PAWAN KUMAR OFFICIAL PROFESSIONAL ID CARD */}
+            {isPawanPropzy && (
+              <div className="bg-[#0a110d] rounded-3xl border border-emerald-950/90 p-5 sm:p-8 shadow-xl space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-950 pb-4">
+                  <div>
+                    <h3 className="text-base sm:text-lg font-extrabold text-white flex items-center space-x-2">
+                      <ShieldCheck className="text-emerald-400" size={20} />
+                      <span>Official Executive Identity Card</span>
+                    </h3>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      Propzy Tricity Official Employee & Sales Executive Badge
+                    </p>
                   </div>
-                  <p className="text-xs text-gray-400 mt-0.5">Manage your contact details, city, and account role</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (typeof window !== 'undefined') {
+                        window.print();
+                      }
+                    }}
+                    className="self-start sm:self-auto px-4 py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs rounded-full shadow-lg shadow-emerald-500/20 flex items-center space-x-1.5 transition-all cursor-pointer shrink-0"
+                  >
+                    <Printer size={14} />
+                    <span>Print ID Card</span>
+                  </button>
+                </div>
+
+                {/* Physical ID Card Container */}
+                <div className="flex justify-center py-2">
+                  <div className="w-full max-w-[340px] sm:max-w-[360px] rounded-3xl overflow-hidden border-2 border-emerald-500/70 shadow-[0_0_50px_rgba(16,185,129,0.25)] bg-gradient-to-b from-[#0c2417] via-[#07150e] to-[#040805] text-white p-5 sm:p-6 space-y-4 relative">
+                    
+                    {/* Top Lanyard Slot Cutout */}
+                    <div className="w-14 h-2.5 bg-[#030604] rounded-full border border-emerald-900/80 mx-auto shadow-inner" />
+
+                    {/* Div 1: Logo of Propzy */}
+                    <div className="flex items-center justify-center space-x-2.5 pt-1">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500 flex items-center justify-center text-black shadow-lg shadow-emerald-500/30">
+                        <Home size={18} className="stroke-[2.5]" />
+                      </div>
+                      <div className="flex flex-col leading-none text-left">
+                        <span className="text-xl font-black tracking-wider uppercase text-white font-sans">
+                          PROP<span className="text-emerald-400">ZY</span>
+                        </span>
+                        <span className="text-[9px] font-extrabold tracking-widest text-emerald-400 uppercase mt-0.5">
+                          TRICITY
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Div 2: Image, Name & Employee ID */}
+                    <div className="flex flex-col items-center text-center space-y-2 pt-1">
+                      <div className="relative">
+                        <img
+                          src="/Pawan_image.jpeg"
+                          alt="Pawan Kumar"
+                          className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl object-cover border-2 border-emerald-400 shadow-xl shadow-emerald-950/80 ring-4 ring-emerald-500/20"
+                        />
+                        <div className="absolute -bottom-2 -right-2 bg-emerald-500 text-black p-1 rounded-full shadow-md">
+                          <ShieldCheck size={16} className="stroke-[2.5]" />
+                        </div>
+                      </div>
+                      <div className="pt-1">
+                        <h3 className="text-xl font-extrabold text-white tracking-wide">Pawan Kumar</h3>
+                        <div className="text-xs font-mono font-bold text-emerald-400 mt-0.5 bg-emerald-950/90 px-2.5 py-0.5 rounded-full border border-emerald-800/80 inline-block">
+                          Employee ID: PZ-EMP-001
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Div 3: Large text of "Sales Executive" */}
+                    <div className="w-full">
+                      <div className="bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-400 text-black py-2 px-4 rounded-xl text-center shadow-lg shadow-emerald-500/25">
+                        <span className="text-base sm:text-lg font-black tracking-wider uppercase block">
+                          SALES EXECUTIVE
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Div 4: Proper address of company (from contact page) */}
+                    <div className="bg-[#050e09] border border-emerald-900/80 rounded-2xl p-3 text-center space-y-1">
+                      <div className="flex items-center justify-center space-x-1.5 text-emerald-400 text-xs font-bold">
+                        <MapPin size={13} className="shrink-0" />
+                        <span>Propzy Tricity Official Office</span>
+                      </div>
+                      <p className="text-[11px] text-gray-300 font-medium leading-relaxed">
+                        4th Floor, D 256, Industrial Area, Sector 75, Sahibzada Ajit Singh Nagar, Punjab 140307
+                      </p>
+                      <div className="flex items-center justify-center space-x-3 text-[10px] font-mono text-gray-400 pt-0.5">
+                        <span> 9317902609</span>
+                        <span>•</span>
+                        <span> pawanpropzy@gmail.com  </span>
+                      </div>
+                    </div>
+
+                    {/* Div 5: Scanner */}
+                    <div className="flex flex-col items-center justify-center space-y-1.5 pt-1">
+                      <div className="bg-white p-2 rounded-2xl border-2 border-emerald-400/80 shadow-lg shadow-emerald-950/60">
+                        <img
+                          src="/Propzy QR Code.png"
+                          alt="Propzy Verification Scanner"
+                          className="w-24 h-24 sm:w-28 sm:h-28 object-contain"
+                        />
+                      </div>
+                      <span className="text-[10px] font-mono font-bold text-emerald-400 tracking-wider uppercase">
+                        SCAN TO VERIFY OFFICIAL ID
+                      </span>
+                    </div>
+
+                  </div>
                 </div>
               </div>
+            )}
 
-              {!isEditingAccount ? (
-                <button
-                  type="button"
-                  onClick={() => setIsEditingAccount(true)}
-                  className="self-start sm:self-auto inline-flex items-center justify-center space-x-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black rounded-full text-xs font-extrabold shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all cursor-pointer whitespace-nowrap active:scale-95 shrink-0"
-                >
-                  <Edit3 size={14} className="stroke-[2.5]" />
-                  <span>Edit Profile</span>
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setIsEditingAccount(false)}
-                  className="self-start sm:self-auto inline-flex items-center justify-center space-x-1.5 px-4 py-2 bg-[#0b1610] hover:bg-[#12241a] text-gray-300 hover:text-white border border-emerald-900/60 rounded-full text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0"
-                >
-                  <X size={14} />
-                  <span>Cancel</span>
-                </button>
-              )}
-            </div>
+            <div className="bg-[#0a110d] rounded-3xl border border-emerald-950/90 p-5 sm:p-8 shadow-xl space-y-6">
+              {/* Header with Avatar and Action */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-emerald-950 pb-5">
+                <div className="flex items-center space-x-3.5">
+                  <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-emerald-600 to-emerald-400 text-black font-extrabold text-lg flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0 uppercase">
+                    {user.name ? user.name[0] : 'U'}
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-lg font-extrabold text-white tracking-tight">{user.name}</h3>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                        isPawanPropzy
+                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-black font-extrabold shadow-md'
+                          : 'bg-emerald-950/80 border border-emerald-800/80 text-emerald-400'
+                      }`}>
+                        {roleBadgeName}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-0.5">Manage your contact details, city, and account role</p>
+                  </div>
+                </div>
+
+                {!isEditingAccount ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingAccount(true)}
+                    className="self-start sm:self-auto inline-flex items-center justify-center space-x-2 px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black rounded-full text-xs font-extrabold shadow-lg shadow-emerald-500/20 hover:shadow-emerald-500/30 transition-all cursor-pointer whitespace-nowrap active:scale-95 shrink-0"
+                  >
+                    <Edit3 size={14} className="stroke-[2.5]" />
+                    <span>Edit Profile</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsEditingAccount(false)}
+                    className="self-start sm:self-auto inline-flex items-center justify-center space-x-1.5 px-4 py-2 bg-[#0b1610] hover:bg-[#12241a] text-gray-300 hover:text-white border border-emerald-900/60 rounded-full text-xs font-semibold transition-all cursor-pointer whitespace-nowrap shrink-0"
+                  >
+                    <X size={14} />
+                    <span>Cancel</span>
+                  </button>
+                )}
+              </div>
 
             {!isEditingAccount ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
                 <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
                   <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
                     <User size={15} />
@@ -686,17 +945,129 @@ function DashboardContent() {
                   </div>
                 </div>
 
-                <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
-                  <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
-                    <Building size={15} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Account Role</span>
-                    <span className="text-sm font-bold text-emerald-400 truncate block">
-                      {user.role === 'owner' ? 'Property Owner' : 'Tenant Account'}
-                    </span>
-                  </div>
-                </div>
+                {user.role === 'owner' ? (
+                  <>
+                    {/* Card 4: City / Location */}
+                    <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
+                      <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
+                        <MapPin size={15} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-gray-500 font-medium block text-[11px] mb-0.5">City / Location</span>
+                        <span className="text-sm font-bold text-white truncate block">{user.city || 'Mohali'}</span>
+                      </div>
+                    </div>
+
+                    {/* Card 5: Account Role */}
+                    <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
+                      <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
+                        <Building size={15} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Account Role</span>
+                        <span className="text-sm font-bold text-emerald-400 truncate block">
+                          {roleDisplayName}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Card 6: Listed Properties */}
+                    <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
+                      <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
+                        <Home size={15} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-gray-500 font-medium block text-[11px] mb-0.5">My Listed Properties</span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-mono font-bold text-emerald-400">
+                            {myProperties.length} {myProperties.length === 1 ? 'Property' : 'Properties'}
+                          </span>
+                          {myProperties.length > 0 ? (
+                            <button
+                              type="button"
+                              onClick={() => handleTabChange('my-properties')}
+                              className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 underline cursor-pointer"
+                            >
+                              View All
+                            </button>
+                          ) : (
+                            <Link
+                              href="/post-property"
+                              className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 underline cursor-pointer"
+                            >
+                              + Post Property
+                            </Link>
+                          )}
+                        </div>
+                        <span className="text-[11px] text-gray-400 block mt-0.5">
+                          Properties posted under your account
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Card 4: Account Role */}
+                    <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
+                      <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
+                        <Building size={15} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Account Role</span>
+                        <span className="text-sm font-bold text-emerald-400 truncate block">
+                          {roleDisplayName}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Card 5: Subscription Plan */}
+                    <div className="p-4 bg-[#050806] rounded-2xl border border-amber-950/60 flex items-start space-x-3 group hover:border-amber-900/80 transition-colors">
+                      <div className="w-8 h-8 rounded-xl bg-[#1f1709] text-amber-400 border border-amber-800/50 flex items-center justify-center shrink-0">
+                        <Sparkles size={15} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Active Subscription</span>
+                        <span className="text-sm font-bold text-amber-300 truncate block">
+                          {user.activePlan || 'Standard Plan'}
+                        </span>
+                        <span className="text-[11px] text-gray-400 block mt-0.5">
+                          {user.planExpiresAt ? (
+                            new Date(user.planExpiresAt) > new Date()
+                              ? `Valid till ${new Date(user.planExpiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                              : 'Plan Expired'
+                          ) : (
+                            'Active Plan'
+                          )}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Card 6: Contact Credits */}
+                    <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
+                      <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
+                        <Zap size={15} className="fill-emerald-400/30" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Contact Credits</span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-mono font-bold text-emerald-400">
+                            {user.credits ?? 0} Credits
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleTabChange('explore-plans')}
+                            className="text-[10px] font-bold text-amber-400 hover:text-amber-300 underline cursor-pointer"
+                          >
+                            + Recharge
+                          </button>
+                        </div>
+                        <span className="text-[11px] text-gray-400 block mt-0.5">
+                          Used to unlock verified owner contacts
+                        </span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             ) : (
               <form onSubmit={handleAccountFormSave} className="space-y-5 max-w-2xl mx-auto text-xs py-2">
@@ -753,9 +1124,9 @@ function DashboardContent() {
                 <div className="space-y-1.5">
                   <label className="block text-gray-300 font-semibold">Account Type / Role</label>
                   <div className="w-full px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white font-bold capitalize flex items-center justify-between">
-                    <span className="text-emerald-400 font-extrabold">{user.role === 'owner' ? 'Property Owner' : 'Tenant Account'}</span>
+                    <span className="text-emerald-400 font-extrabold">{roleDisplayName}</span>
                     <span className="text-[10px] bg-emerald-950 border border-emerald-800 text-emerald-300 px-2.5 py-0.5 rounded-full font-mono uppercase">
-                      {user.role}
+                      {roleBadgeName}
                     </span>
                   </div>
                 </div>
@@ -961,6 +1332,7 @@ function DashboardContent() {
             )}
 
 
+            </div>
           </div>
         )}
 
@@ -999,25 +1371,87 @@ function DashboardContent() {
               </div>
             ) : (
               <div className="divide-y divide-emerald-950">
-                {myProperties.map((p: PropertyItem) => (
+                {myProperties.map((p: PropertyItem) => {
+                  const propThumb = (p.images && p.images.length > 0 ? p.images[0] : null) || p.videoThumbnail || (p.videos && p.videos[0] && p.videos[0].includes('res.cloudinary.com') ? p.videos[0].replace(/\.(mp4|mov|webm|mkv|avi|m4v)(\?.*)?$/i, '.jpg').replace('/video/upload/', '/video/upload/so_0,q_auto,f_auto/') : '') || '';
+                  return (
                   <div key={p.id || p.pid} className="py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                     <div className="flex items-center space-x-4">
-                      <LazyImage src={p.images?.[0] || ''} alt={p.title} className="w-16 h-16 rounded-2xl border border-emerald-950" />
+                      {propThumb ? (
+                        <LazyImage src={propThumb} alt={p.title} className="w-16 h-16 rounded-2xl border border-emerald-950 object-cover shrink-0" />
+                      ) : (
+                        <div className="w-16 h-16 rounded-2xl border border-emerald-950 bg-[#06140c] flex items-center justify-center text-emerald-500/60 shrink-0">
+                          <Building size={20} />
+                        </div>
+                      )}
                       <div>
-                        <div className="flex items-center space-x-2">
+                        <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono text-xs text-emerald-400 font-extrabold">{p.pid}</span>
                           {p.verified ? (
                             <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[9px] font-extrabold">VERIFIED & LIVE</span>
                           ) : (
                             <span className="px-2 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800 text-[9px] font-extrabold">UNDER REVIEW</span>
                           )}
+                          {p.available === false && (
+                            <span className="px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-400 border border-zinc-700 text-[9px] font-bold">INACTIVE</span>
+                          )}
                         </div>
-                        <h4 className="text-sm font-bold text-white">{p.title}</h4>
+                        <h4 className="text-sm font-bold text-white mt-0.5">{p.title}</h4>
                         <p className="text-xs text-gray-400">{p.locality}, {p.city} • ₹{p.price.toLocaleString('en-IN')}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center space-x-3">
+                    <div className="flex flex-wrap items-center gap-2.5 sm:self-center">
+                      {/* Proper Sliding Toggle Switch */}
+                      <button
+                        type="button"
+                        onClick={() => handleToggleAvailability(p)}
+                        className={`flex items-center space-x-2 px-3 py-1.5 rounded-full border transition-all cursor-pointer select-none ${
+                          p.available !== false
+                            ? 'bg-[#06180f] border-emerald-800/80 hover:bg-emerald-950/80'
+                            : 'bg-[#0e0e0e] border-zinc-800 hover:border-zinc-700'
+                        }`}
+                        title={p.available !== false ? 'Click to make Inactive (Hide from public listings)' : 'Click to make Active (Show in public listings)'}
+                      >
+                        {/* Switch Track */}
+                        <div
+                          className={`w-8 h-4.5 rounded-full transition-colors relative flex items-center p-0.5 ${
+                            p.available !== false
+                              ? 'bg-emerald-500'
+                              : 'bg-zinc-600'
+                          }`}
+                        >
+                          {/* Sliding Thumb Knob */}
+                          <div
+                            className={`w-3.5 h-3.5 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
+                              p.available !== false
+                                ? 'translate-x-3.5'
+                                : 'translate-x-0'
+                            }`}
+                          />
+                        </div>
+
+                        {/* Label */}
+                        <span
+                          className={`text-xs font-bold transition-colors ${
+                            p.available !== false
+                              ? 'text-emerald-300'
+                              : 'text-zinc-400'
+                          }`}
+                        >
+                          {p.available !== false ? 'Active' : 'Inactive'}
+                        </span>
+                      </button>
+
+                      {/* Edit Button */}
+                      <Link
+                        href={`/post-property?edit=${p.id || p.pid}`}
+                        className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold rounded-full text-xs shadow-md shadow-emerald-500/20 transition-all flex items-center space-x-1.5 cursor-pointer"
+                      >
+                        <Edit3 size={13} />
+                        <span>Edit</span>
+                      </Link>
+
+                      {/* View Button */}
                       <Link
                         href={`/properties/${p.id || p.pid}`}
                         className="px-3.5 py-1.5 bg-[#06180f] text-emerald-400 border border-emerald-800/60 rounded-full text-xs font-bold hover:bg-emerald-900/60 transition-colors"
@@ -1026,7 +1460,8 @@ function DashboardContent() {
                       </Link>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -1063,8 +1498,8 @@ function DashboardContent() {
           </div>
         )}
 
-        {/* TAB 4: BILLING HISTORY */}
-        {activeTab === 'billing' && (
+        {/* TAB 4: BILLING HISTORY (TENANT ONLY) */}
+        {activeTab === 'billing' && user?.role !== 'owner' && (
           <div className="bg-[#0a110d] rounded-3xl border border-emerald-950/90 p-6 sm:p-8 shadow-xl space-y-6">
             <div className="flex items-center justify-between border-b border-emerald-950 pb-4">
               <div>
@@ -1123,7 +1558,7 @@ function DashboardContent() {
         )}
 
         {/* TAB 5: EXPLORE PLANS (TENANT ONLY) */}
-        {activeTab === 'explore-plans' && (
+        {activeTab === 'explore-plans' && user?.role !== 'owner' && (
           <div className="bg-[#0a110d] rounded-3xl border border-emerald-950/90 p-6 sm:p-8 shadow-xl space-y-6">
             <div className="text-center max-w-xl mx-auto space-y-2 mb-8">
               <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-[#081f13] border border-emerald-800/60 text-emerald-400 text-xs font-semibold">
@@ -1180,10 +1615,18 @@ function DashboardContent() {
 
                 <button
                   type="button"
-                  onClick={() => showToast('Redirecting to payment gateway for ₹399 plan...')}
-                  className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs rounded-2xl shadow-xl shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer"
+                  disabled={Boolean(processingPlan)}
+                  onClick={() => handleSubscribeToPlan('Standard Plan (20 Credits)', 399)}
+                  className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-700 disabled:opacity-75 text-black font-extrabold text-xs rounded-2xl shadow-xl shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                 >
-                  Subscribe Now • ₹399
+                  {processingPlan === 'Standard Plan (20 Credits)' ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                      <span>Processing Payment...</span>
+                    </>
+                  ) : (
+                    <span>Subscribe Now • ₹399</span>
+                  )}
                 </button>
               </div>
 
@@ -1245,22 +1688,30 @@ function DashboardContent() {
 
                 <button
                   type="button"
-                  onClick={() => showToast('Redirecting to payment gateway for ₹999 plan...')}
-                  className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs rounded-2xl shadow-xl shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer"
+                  disabled={Boolean(processingPlan)}
+                  onClick={() => handleSubscribeToPlan('Premium Plan (100 Credits)', 999)}
+                  className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-700 disabled:opacity-75 text-black font-extrabold text-xs rounded-2xl shadow-xl shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed flex items-center justify-center space-x-2"
                 >
-                  Subscribe Now • ₹999
+                  {processingPlan === 'Premium Plan (100 Credits)' ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                      <span>Processing Payment...</span>
+                    </>
+                  ) : (
+                    <span>Subscribe Now • ₹999</span>
+                  )}
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* TAB 6: INQUIRIES */}
-        {activeTab === 'inquiries' && (
+        {/* TAB 6: INQUIRIES (OWNER ONLY) */}
+        {activeTab === 'inquiries' && user?.role === 'owner' && (
           <div className="bg-[#0a110d] rounded-3xl border border-emerald-950/90 p-6 shadow-xl space-y-4">
-            <h3 className="text-base font-bold text-white">Your Submitted Callback Inquiries & Leads</h3>
+            <h3 className="text-base font-bold text-white">Tenant Leads & Inquiries on Your Properties</h3>
             {myInquiries.length === 0 ? (
-              <p className="text-xs text-gray-400 py-6 text-center">No callback inquiries recorded for your account yet.</p>
+              <p className="text-xs text-gray-400 py-6 text-center">No tenant inquiries recorded for your properties yet.</p>
             ) : (
               <div className="divide-y divide-emerald-950">
                 {myInquiries.map((inq: InquiryItem, idx: number) => (
@@ -1273,6 +1724,11 @@ function DashboardContent() {
                       <div className="text-gray-400 mt-1">
                         Tenant: <strong className="text-white">{inq.tenantName}</strong>
                       </div>
+                      {inq.tenantMessage && (
+                        <div className="text-gray-400 text-[11px] mt-1 italic">
+                          "{inq.tenantMessage}"
+                        </div>
+                      )}
                     </div>
 
                     <span className="px-3 py-1 bg-[#092618] text-emerald-400 border border-emerald-800/80 text-[10px] font-bold rounded-full uppercase">

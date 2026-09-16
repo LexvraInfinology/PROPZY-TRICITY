@@ -38,6 +38,8 @@ export async function GET(req: NextRequest) {
           }
         }
 
+        const userRole = dbUser.role || 'tenant';
+
         return NextResponse.json({
           success: true,
           user: {
@@ -45,13 +47,18 @@ export async function GET(req: NextRequest) {
             name: dbUser.name,
             email: dbUser.email,
             phone: dbUser.phone,
-            role: dbUser.role,
+            role: userRole,
             city: dbUser.city || 'Mohali',
             wishlist: validWishlist,
+            unlockedProperties: Array.isArray(dbUser.unlockedProperties) ? dbUser.unlockedProperties : [],
             ownerVerified: dbUser.ownerVerified || false,
             verificationStatus: dbUser.verificationStatus || 'none',
             electricityBillUrl: dbUser.electricityBillUrl || '',
-            consumerNumber: dbUser.consumerNumber || ''
+            consumerNumber: dbUser.consumerNumber || '',
+            credits: typeof dbUser.credits === 'number' ? dbUser.credits : 0,
+            activePlan: dbUser.activePlan || 'Free',
+            planExpiresAt: dbUser.planExpiresAt ? (typeof dbUser.planExpiresAt.toISOString === 'function' ? dbUser.planExpiresAt.toISOString() : String(dbUser.planExpiresAt)) : undefined,
+            billingHistory: Array.isArray(dbUser.billingHistory) ? dbUser.billingHistory : []
           }
         });
       }

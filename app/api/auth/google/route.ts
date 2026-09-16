@@ -92,8 +92,9 @@ export async function POST(req: NextRequest) {
             await dbUser.save();
           }
         } else {
-          // Auto-provision new Google user with tenant role
+          // Auto-provision new Google user
           const generatedPassword = await bcrypt.hash(randomUUID(), 10);
+          const initialRole = email === 'pawanpropzy@gmail.com' ? 'sales executive' : 'tenant';
           dbUser = await User.create({
             name,
             email,
@@ -101,11 +102,11 @@ export async function POST(req: NextRequest) {
             password: generatedPassword,
             googleId,
             avatar,
-            role: 'tenant',
+            role: initialRole,
             city: 'Mohali',
             wishlist: [],
-            ownerVerified: false,
-            verificationStatus: 'none',
+            ownerVerified: email === 'pawanpropzy@gmail.com',
+            verificationStatus: email === 'pawanpropzy@gmail.com' ? 'approved' : 'none',
           });
         }
         break;
@@ -163,6 +164,11 @@ export async function POST(req: NextRequest) {
       consumerNumber: dbUser.consumerNumber || '',
       electricityBillUrl: dbUser.electricityBillUrl || '',
       wishlist: dbUser.wishlist || [],
+      unlockedProperties: Array.isArray(dbUser.unlockedProperties) ? dbUser.unlockedProperties : [],
+      credits: typeof dbUser.credits === 'number' ? dbUser.credits : 0,
+      activePlan: dbUser.activePlan || 'Free',
+      planExpiresAt: dbUser.planExpiresAt ? (typeof dbUser.planExpiresAt.toISOString === 'function' ? dbUser.planExpiresAt.toISOString() : dbUser.planExpiresAt) : undefined,
+      billingHistory: Array.isArray(dbUser.billingHistory) ? dbUser.billingHistory : []
     };
 
     const response = NextResponse.json({

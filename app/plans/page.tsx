@@ -18,24 +18,64 @@ import {
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { CallToActionBanner } from '@/components/CallToActionBanner';
+import { initiateRazorpaySubscription } from '@/lib/razorpayClient';
 
 export default function ExplorePlansPage() {
   const router = useRouter();
-  const { user, openAuthModal, showToast } = useApp();
+  const { user, setUser, openAuthModal, showToast } = useApp();
+  const [processingPlan, setProcessingPlan] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     }
-  }, []);
+    if (user?.role === 'owner') {
+      showToast('Subscription plans are only for tenants. Property owners can list properties for free!');
+      router.replace('/dashboard?tab=my-properties');
+    }
+  }, [user, router, showToast]);
 
-  const handleSubscribe = (planName: string, amount: number) => {
+  const handleSubscribe = async (planName: string, amount: number) => {
     if (!user) {
-      showToast(`Please login to subscribe to the ${planName}`);
+      showToast(`Please login to subscribe to the ${planName}`, 'error');
       openAuthModal();
       return;
     }
-    showToast(`Redirecting to payment gateway for ${planName} (₹${amount})...`);
+
+    if (user.role === 'owner') {
+      showToast('Subscription plans are for tenants. Property owners can list properties for free!', 'error');
+      router.replace('/dashboard?tab=my-properties');
+      return;
+    }
+
+    setProcessingPlan(planName);
+    showToast(`Initializing Razorpay payment for ${planName} (₹${amount})...`);
+
+    await initiateRazorpaySubscription({
+      planName,
+      amount,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone
+      },
+      onSuccess: ({ user: updatedUser, message }) => {
+        setProcessingPlan(null);
+        if (updatedUser) {
+          setUser(updatedUser);
+        }
+        showToast(message || `🎉 Successfully subscribed to ${planName}!`, 'success');
+      },
+      onError: (errorMsg) => {
+        setProcessingPlan(null);
+        showToast(errorMsg || 'Payment failed. Please try again.', 'error');
+      },
+      onDismiss: () => {
+        setProcessingPlan(null);
+        showToast('Payment window closed.', 'error');
+      }
+    });
   };
 
   const handleBack = () => {
@@ -85,7 +125,9 @@ export default function ExplorePlansPage() {
                 {user.name?.charAt(0) || 'U'}
               </div>
               <span className="text-gray-200 font-semibold hidden sm:inline">{user.name?.split(' ')[0]}</span>
-              <span className="text-[10px] text-emerald-400 font-mono">({user.activePlan || 'Free'})</span>
+              <span className="text-[10px] text-emerald-400 font-mono">
+                ({user.role === 'owner' ? 'Owner' : (user.activePlan || 'Free')})
+              </span>
             </div>
           ) : (
             <button
@@ -200,10 +242,18 @@ export default function ExplorePlansPage() {
 
                 <button
                   type="button"
+                  disabled={Boolean(processingPlan)}
                   onClick={() => handleSubscribe('Standard Plan (20 Credits)', 399)}
-                  className="w-full py-3.5 sm:py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs sm:text-sm rounded-2xl shadow-xl shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer mt-2"
+                  className="w-full py-3.5 sm:py-4 bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-700 disabled:opacity-75 text-black font-extrabold text-xs sm:text-sm rounded-2xl shadow-xl shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed mt-2 flex items-center justify-center space-x-2"
                 >
-                  Subscribe Now • ₹399
+                  {processingPlan === 'Standard Plan (20 Credits)' ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                      <span>Processing Payment...</span>
+                    </>
+                  ) : (
+                    <span>Subscribe Now • ₹399</span>
+                  )}
                 </button>
               </div>
 
@@ -281,10 +331,18 @@ export default function ExplorePlansPage() {
 
                 <button
                   type="button"
+                  disabled={Boolean(processingPlan)}
                   onClick={() => handleSubscribe('Premium Plan (100 Credits)', 999)}
-                  className="w-full py-3.5 sm:py-4 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs sm:text-sm rounded-2xl shadow-xl shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer mt-2"
+                  className="w-full py-3.5 sm:py-4 bg-emerald-500 hover:bg-emerald-400 disabled:bg-emerald-700 disabled:opacity-75 text-black font-extrabold text-xs sm:text-sm rounded-2xl shadow-xl shadow-emerald-500/25 transition-all active:scale-95 cursor-pointer disabled:cursor-not-allowed mt-2 flex items-center justify-center space-x-2"
                 >
-                  Subscribe Now • ₹999
+                  {processingPlan === 'Premium Plan (100 Credits)' ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                      <span>Processing Payment...</span>
+                    </>
+                  ) : (
+                    <span>Subscribe Now • ₹999</span>
+                  )}
                 </button>
               </div>
             </div>

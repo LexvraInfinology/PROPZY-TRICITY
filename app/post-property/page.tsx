@@ -1,22 +1,30 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, Suspense } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { ShieldCheck, PlusCircle, Building2, MapPin, DollarSign, Check, CheckCircle2, Upload, X, Image as ImageIcon, Plus, Trash2, Camera, Clock, AlertTriangle, Loader2, RotateCw } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ShieldCheck, PlusCircle, Building2, MapPin, Check, CheckCircle2, Upload, X, Image as ImageIcon, Plus, Trash2, Camera, Clock, AlertTriangle, Loader2, RotateCw, Video, Play, Film, Sparkles, Edit3 } from 'lucide-react';
 
 import { useApp } from '@/context/AppContext';
 import { LazyImage } from '@/components/LazyImage';
+import { BrandSpinner } from '@/components/Loader';
 import { sanitizeName, sanitizePhone, isValidName, isValidPhone } from '@/lib/validation';
 
 
-export default function PostPropertyPage() {
+function PostPropertyContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const editPid = searchParams.get('edit') || searchParams.get('id') || '';
+  const isEditMode = Boolean(editPid);
+
   const { showToast, user, setUser, openAuthModal } = useApp();
 
   const [step, setStep] = useState(1);
   const [submitting, setSubmitting] = useState(false);
   const [createdProperty, setCreatedProperty] = useState<any>(null);
+  const [loadingEdit, setLoadingEdit] = useState(isEditMode);
+  const [editUnauthorized, setEditUnauthorized] = useState(false);
+  const [initialLoadedPid, setInitialLoadedPid] = useState('');
 
   // Form State
   const [category, setCategory] = useState<'rent' | 'sell' | 'buy' | 'pg' | 'commercial'>('rent');
@@ -26,16 +34,19 @@ export default function PostPropertyPage() {
   const [city, setCity] = useState('Mohali');
   const [locality, setLocality] = useState('');
   const [address, setAddress] = useState('');
-  const [price, setPrice] = useState<number | ''>(12000);
-  const [deposit, setDeposit] = useState<number | ''>(12000);
+  const [price, setPrice] = useState<string | number>('12000');
+  const [deposit, setDeposit] = useState<string | number>('12000');
   const [bedrooms, setBedrooms] = useState<number>(2);
   const [bathrooms, setBathrooms] = useState<number>(2);
-  const [areaSqFt, setAreaSqFt] = useState<number>(1000);
+  const [areaSqFt, setAreaSqFt] = useState<number | ''>('');
   const [furnishing, setFurnishing] = useState<'unfurnished' | 'semi-furnished' | 'fully-furnished'>('semi-furnished');
   const [description, setDescription] = useState('');
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([
-    'Power Backup', 'Air Conditioner', 'Car Parking', 'Modular Kitchen'
+    'Inverter', 'AC', 'Cooler', 'Modular Kitchen'
   ]);
+  const [customAmenities, setCustomAmenities] = useState<string[]>([]);
+  const [newAmenityInput, setNewAmenityInput] = useState('');
+  const [isAddingCustomAmenity, setIsAddingCustomAmenity] = useState(false);
 
   const isCommercial = category === 'commercial' || type === 'commercial';
   // Images State & Upload Handlers
@@ -55,15 +66,86 @@ export default function PostPropertyPage() {
   const [isAddingUrl, setIsAddingUrl] = useState(false);
   const [uploadTab, setUploadTab] = useState<'file' | 'url'>('file');
 
+  // Video State & Upload Handlers
+  const [videos, setVideos] = useState<string[]>([]);
+  const [videoUrlInput, setVideoUrlInput] = useState('');
+  const [videoTab, setVideoTab] = useState<'file' | 'url'>('file');
+  const [videoUploading, setVideoUploading] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+
   const isUploadingImages = uploadQueue.some(item => item.status === 'uploading');
 
   const [ownerName, setOwnerName] = useState(user?.name || '');
   const [ownerPhone, setOwnerPhone] = useState(user?.phone || '');
 
   React.useEffect(() => {
-    if (user?.name && !ownerName) setOwnerName(user.name);
-    if (user?.phone && !ownerPhone) setOwnerPhone(user.phone);
-  }, [user?.name, user?.phone]);
+    if (!isEditMode) {
+      if (user?.name && !ownerName) setOwnerName(user.name);
+      if (user?.phone && !ownerPhone) setOwnerPhone(user.phone);
+    }
+  }, [user?.name, user?.phone, isEditMode, ownerName, ownerPhone]);
+
+  // Fetch listing details if in Edit Mode
+  React.useEffect(() => {
+    if (!isEditMode || !editPid) {
+      setLoadingEdit(false);
+      return;
+    }
+    let isMounted = true;
+    setLoadingEdit(true);
+    setEditUnauthorized(false);
+
+    fetch(`/api/properties/${editPid}`)
+      .then(res => res.json())
+      .then(data => {
+        if (!isMounted) return;
+        if (data.success && data.data) {
+          const prop = data.data;
+          const isAuthorized = user?.role === 'admin' || (user?.email && prop.ownerEmail && user.email.toLowerCase() === prop.ownerEmail.toLowerCase());
+          if (!isAuthorized && user) {
+            setEditUnauthorized(true);
+            setLoadingEdit(false);
+            return;
+          }
+
+          if (prop.category) setCategory(prop.category);
+          if (prop.type) setType(prop.type);
+          if (prop.commercialSubType) setCommercialSubType(prop.commercialSubType);
+          if (prop.title) setTitle(prop.title);
+          if (prop.city) setCity(prop.city);
+          if (prop.locality) setLocality(prop.locality);
+          if (prop.address) setAddress(prop.address);
+          if (typeof prop.price !== 'undefined') setPrice(prop.price);
+          if (typeof prop.deposit !== 'undefined') setDeposit(prop.deposit);
+          if (typeof prop.bedrooms !== 'undefined') setBedrooms(prop.bedrooms);
+          if (typeof prop.bathrooms !== 'undefined') setBathrooms(prop.bathrooms);
+          if (typeof prop.areaSqFt === 'number' && prop.areaSqFt > 0) setAreaSqFt(prop.areaSqFt);
+          else setAreaSqFt('');
+          if (prop.furnishing) setFurnishing(prop.furnishing);
+          if (prop.description) setDescription(prop.description);
+          if (Array.isArray(prop.amenities)) setSelectedAmenities(prop.amenities);
+          if (Array.isArray(prop.images)) setImages(prop.images);
+          if (Array.isArray(prop.videos)) setVideos(prop.videos);
+          if (prop.ownerName) setOwnerName(prop.ownerName);
+          if (prop.ownerPhone) setOwnerPhone(prop.ownerPhone);
+          setInitialLoadedPid(prop.pid || editPid);
+        } else {
+          showToast(data.message || 'Could not find property to edit', 'error');
+        }
+        setLoadingEdit(false);
+      })
+      .catch(err => {
+        if (isMounted) {
+          console.error('Failed to load property for edit:', err);
+          showToast('Failed to load property data for editing', 'error');
+          setLoadingEdit(false);
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [isEditMode, editPid, user]);
 
   const postPropertyChannelRef = React.useRef<BroadcastChannel | null>(null);
   const draftSyncLockedRef = React.useRef(false);
@@ -81,11 +163,11 @@ export default function PostPropertyPage() {
     city: string;
     locality: string;
     address: string;
-    price: number | '';
-    deposit: number | '';
+    price: string | number;
+    deposit: string | number;
     bedrooms: number;
     bathrooms: number;
-    areaSqFt: number;
+    areaSqFt: number | '';
     furnishing: 'unfurnished' | 'semi-furnished' | 'fully-furnished';
     description: string;
     selectedAmenities: string[];
@@ -142,11 +224,11 @@ export default function PostPropertyPage() {
     if (typeof draft.city === 'string') setCity(draft.city || 'Mohali');
     if (typeof draft.locality === 'string') setLocality(draft.locality || '');
     if (typeof draft.address === 'string') setAddress(draft.address || '');
-    if (typeof draft.price !== 'undefined') setPrice(draft.price ?? 12000);
-    if (typeof draft.deposit !== 'undefined') setDeposit(draft.deposit ?? 12000);
+    if (typeof draft.price !== 'undefined') setPrice(draft.price ?? '12000');
+    if (typeof draft.deposit !== 'undefined') setDeposit(draft.deposit ?? '12000');
     if (typeof draft.bedrooms === 'number') setBedrooms(draft.bedrooms);
     if (typeof draft.bathrooms === 'number') setBathrooms(draft.bathrooms ?? 1);
-    if (typeof draft.areaSqFt === 'number') setAreaSqFt(draft.areaSqFt || 1000);
+    if (typeof draft.areaSqFt === 'number' || draft.areaSqFt === '') setAreaSqFt(draft.areaSqFt);
     if (draft.furnishing) setFurnishing(draft.furnishing);
     if (typeof draft.description === 'string') setDescription(draft.description || '');
     if (Array.isArray(draft.selectedAmenities)) setSelectedAmenities(draft.selectedAmenities);
@@ -191,9 +273,9 @@ export default function PostPropertyPage() {
   }, [user]);
 
   const residentialAmenities = [
-    'Power Backup', 'Air Conditioner', 'Car Parking', 'Modular Kitchen',
-    'Wi-Fi', 'Balcony', 'Geyser', 'Elevator', 'Gym', 'Gated Security',
-    'Laundry', 'RO Water', 'Housekeeping', 'CCTV'
+    'Inverter', 'AC', 'Cooler', 'Modular Kitchen',
+    'Fan', 'Balcony', 'Geyser', 'Washing Machine', 'Fridge', 'Almirah',
+    'TV', 'RO Water', 'Bed'
   ];
 
   const commercialAmenities = [
@@ -203,23 +285,8 @@ export default function PostPropertyPage() {
     'Cafeteria / Food Court', 'Reserved Parking'
   ];
 
-  const availableAmenities = isCommercial ? commercialAmenities : residentialAmenities;
-
-  const residentialSampleImages = [
-    { label: 'Modern Flat', url: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?auto=format&fit=crop&w=800&q=80' },
-    { label: 'Luxury Living', url: 'https://images.unsplash.com/photo-1502672260266-1c1ef2d93688?auto=format&fit=crop&w=800&q=80' },
-    { label: 'Kothi / House', url: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80' },
-    { label: 'Cozy Room', url: 'https://images.unsplash.com/photo-1598928506311-c55ded91a20c?auto=format&fit=crop&w=800&q=80' }
-  ];
-
-  const commercialSampleImages = [
-    { label: 'Modern Office', url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800&q=80' },
-    { label: 'Conference / Workspace', url: 'https://images.unsplash.com/photo-1497215728101-856f4ea42174?auto=format&fit=crop&w=800&q=80' },
-    { label: 'Retail / Showroom', url: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?auto=format&fit=crop&w=800&q=80' },
-    { label: 'Commercial Building', url: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=800&q=80' }
-  ];
-
-  const sampleImages = isCommercial ? commercialSampleImages : residentialSampleImages;
+  const baseAmenities = isCommercial ? commercialAmenities : residentialAmenities;
+  const allAvailableAmenities = Array.from(new Set([...baseAmenities, ...customAmenities, ...selectedAmenities]));
 
   const maxSellImages = 10;
   const maxImagesReached = images.length >= maxSellImages;
@@ -610,16 +677,158 @@ export default function PostPropertyPage() {
     );
   };
 
+  const handleAddCustomAmenity = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const cleanAmenity = newAmenityInput.trim();
+    if (!cleanAmenity) return;
+
+    const matched = allAvailableAmenities.find(a => a.toLowerCase() === cleanAmenity.toLowerCase());
+    if (matched) {
+      if (!selectedAmenities.includes(matched)) {
+        setSelectedAmenities(prev => [...prev, matched]);
+      }
+      showToast(`"${cleanAmenity}" is already in the list and has been selected!`);
+      setNewAmenityInput('');
+      setIsAddingCustomAmenity(false);
+      return;
+    }
+
+    setCustomAmenities(prev => [...prev, cleanAmenity]);
+    setSelectedAmenities(prev => [...prev, cleanAmenity]);
+    setNewAmenityInput('');
+    setIsAddingCustomAmenity(false);
+    showToast(`Added "${cleanAmenity}" to amenities!`);
+  };
+
+  const handleRemoveCustomAmenity = (amenityToRemove: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCustomAmenities(prev => prev.filter(a => a !== amenityToRemove));
+    setSelectedAmenities(prev => prev.filter(a => a !== amenityToRemove));
+  };
+
+  const handleVideoFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const MAX_VIDEO_SIZE = 50 * 1024 * 1024; // 50MB
+    const VALID_VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm', 'video/x-matroska'];
+
+    if (!VALID_VIDEO_TYPES.includes(file.type.toLowerCase()) && !file.type.startsWith('video/')) {
+      showToast('Please select a valid video file (.mp4, .mov, or .webm)');
+      e.target.value = '';
+      return;
+    }
+
+    if (file.size > MAX_VIDEO_SIZE) {
+      showToast('Video exceeds 50 MB. Please upload a shorter or compressed clip.');
+      e.target.value = '';
+      return;
+    }
+
+    setVideoUploading(true);
+    setVideoProgress(0);
+
+    try {
+      // 1. Get signed token from server API for video
+      let signData: any = null;
+      try {
+        const signRes = await fetch('/api/cloudinary/sign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: user?.email,
+            userId: user?.id,
+            role: user?.role,
+            resourceType: 'video'
+          })
+        });
+        signData = await signRes.json();
+      } catch (err) {
+        console.warn('Video sign check warning:', err);
+      }
+
+      if (!signData?.success || !signData?.cloudName) {
+        throw new Error(signData?.message || 'Video upload signature failed');
+      }
+
+      // 2. Direct upload to Cloudinary with live progress
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('api_key', signData.apiKey);
+      formData.append('timestamp', String(signData.timestamp));
+      formData.append('signature', signData.signature);
+      formData.append('folder', signData.folder || 'letsrentz/videos');
+
+      const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `https://api.cloudinary.com/v1_1/${signData.cloudName}/video/upload`);
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            const percent = Math.min(99, Math.round((event.loaded / event.total) * 100));
+            setVideoProgress(percent);
+          }
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const resJson = JSON.parse(xhr.responseText);
+              resolve(resJson);
+            } catch {
+              reject(new Error('Invalid response from Cloudinary'));
+            }
+          } else {
+            try {
+              const resJson = JSON.parse(xhr.responseText);
+              reject(new Error(resJson.error?.message || `Upload failed (${xhr.status})`));
+            } catch {
+              reject(new Error(`Upload failed (${xhr.status})`));
+            }
+          }
+        };
+
+        xhr.onerror = () => reject(new Error('Network error during video upload.'));
+        xhr.send(formData);
+      });
+
+      setVideoProgress(100);
+      setVideos([result.secure_url]);
+      showToast(`Video "${file.name}" uploaded successfully!`, 'success');
+    } catch (err: any) {
+      console.error('[Video Upload Error]:', err);
+      showToast(err?.message || 'Failed to upload video');
+    } finally {
+      setVideoUploading(false);
+      e.target.value = '';
+    }
+  };
+
+  const handleAddVideoUrl = () => {
+    const rawUrl = videoUrlInput.trim();
+    if (!rawUrl) {
+      showToast('Please enter a video URL');
+      return;
+    }
+    if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+      showToast('Please enter a valid URL starting with https://');
+      return;
+    }
+    setVideos([rawUrl]);
+    setVideoUrlInput('');
+    showToast('Video tour link added successfully!', 'success');
+  };
+
+  const handleRemoveVideo = (index: number) => {
+    setVideos(prev => prev.filter((_, i) => i !== index));
+    setVideoProgress(0);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting || step === 4) return;
     if (!title || !locality || !price || !ownerName || !ownerPhone) {
       showToast('Please fill out all required fields');
-      return;
-    }
-
-    if (images.length === 0) {
-      showToast('Please upload at least one property photo before submitting');
       return;
     }
 
@@ -636,8 +845,10 @@ export default function PostPropertyPage() {
 
     setSubmitting(true);
 
-    const defaultCommercialDesc = `Prime ${commercialSubType || 'commercial space'} available for ${category === 'sell' || category === 'buy' ? 'sale' : 'rent'} in ${locality}, ${city}. Features ${areaSqFt} sq.ft area with ${furnishing === 'fully-furnished' ? 'fully furnished plug & play setup' : furnishing === 'semi-furnished' ? 'semi-fitted interior' : 'bare shell layout'}. Direct owner contact.`;
-    const defaultResidentialDesc = `Beautiful ${bedrooms} BHK ${type} available for ${category === 'sell' || category === 'buy' ? 'sale' : category} in ${locality}, ${city}. Direct owner contact.`;
+    const areaText = areaSqFt && Number(areaSqFt) > 0 ? `${areaSqFt} sq.ft ` : '';
+    const defaultCommercialDesc = `Prime ${commercialSubType || 'commercial space'} available for ${category === 'sell' || category === 'buy' ? 'sale' : 'rent'} in ${locality}, ${city}. Features ${areaText}area with ${furnishing === 'fully-furnished' ? 'fully furnished plug & play setup' : furnishing === 'semi-furnished' ? 'semi-fitted interior' : 'bare shell layout'}. Direct owner contact.`;
+    const bhkLabel = bedrooms === 0.5 ? '1 RK' : `${bedrooms} BHK`;
+    const defaultResidentialDesc = `Beautiful ${bhkLabel} ${type} available for ${category === 'sell' || category === 'buy' ? 'sale' : category} in ${locality}, ${city}. Direct owner contact.`;
 
     const payload = {
       title,
@@ -645,16 +856,17 @@ export default function PostPropertyPage() {
       type,
       city,
       locality,
-      address: address || `${locality}, ${city}`,
-      price: Number(price),
-      deposit: Number(deposit) || 0,
+      address: `${locality.trim()}, ${city.trim()}`,
+      price: price ? String(price).trim() : '10000',
+      deposit: deposit ? String(deposit).trim() : '0',
       bedrooms: isCommercial ? 0 : Number(bedrooms),
       bathrooms: Number(bathrooms),
-      areaSqFt: Number(areaSqFt),
+      areaSqFt: areaSqFt && Number(areaSqFt) > 0 ? Number(areaSqFt) : null,
       furnishing,
       description: description || (isCommercial ? defaultCommercialDesc : defaultResidentialDesc),
       amenities: selectedAmenities,
       images: images,
+      videos: videos,
       ownerName,
       ownerPhone,
       ownerEmail: user?.email || '',
@@ -662,39 +874,106 @@ export default function PostPropertyPage() {
     };
 
     try {
+      if (isEditMode) {
+        const res = await fetch(`/api/properties/${editPid}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
 
-      const res = await fetch('/api/properties', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-      if (data.success) {
-        setCreatedProperty(data.data);
-        showToast(`Property ${data.data.pid} posted successfully!`);
-        setStep(4); // Success step
+        const data = await res.json();
+        if (data.success && data.data) {
+          setCreatedProperty(data.data);
+          showToast(`Property ${data.data.pid || editPid} updated successfully!`, 'success');
+          setStep(4);
+        } else {
+          showToast(data.message || 'Failed to update property', 'error');
+        }
       } else {
-        showToast(data.message || 'Failed to post property');
+        const res = await fetch('/api/properties', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        if (data.success) {
+          setCreatedProperty(data.data);
+          showToast(`Property ${data.data.pid} posted successfully!`, 'success');
+          setStep(4); // Success step
+        } else {
+          showToast(data.message || 'Failed to post property', 'error');
+        }
       }
     } catch (err) {
-      console.warn('POST fallback:', err);
-      const mockProp = {
-        ...payload,
-        pid: `PZ-${Math.floor(100 + Math.random() * 900)}`,
-        id: `prop-${Date.now()}`,
-        verified: true,
-        featured: false,
-        available: true,
-        createdAt: new Date().toISOString()
-      };
-      setCreatedProperty(mockProp);
-      setStep(4);
-      showToast('Property listed successfully!');
+      console.warn(isEditMode ? 'PATCH fallback:' : 'POST fallback:', err);
+      if (isEditMode) {
+        showToast('Failed to update property. Please try again.', 'error');
+      } else {
+        const mockProp = {
+          ...payload,
+          pid: `PZ-${Math.floor(100 + Math.random() * 900)}`,
+          id: `prop-${Date.now()}`,
+          verified: true,
+          featured: false,
+          available: true,
+          createdAt: new Date().toISOString()
+        };
+        setCreatedProperty(mockProp);
+        setStep(4);
+        showToast('Property listed successfully!');
+      }
     } finally {
       setSubmitting(false);
     }
   };
+
+  // 0. LOADING EDIT STATE
+  if (loadingEdit) {
+    return (
+      <div className="bg-[#050806] text-gray-100 min-h-screen py-20 flex items-center justify-center">
+        <BrandSpinner message={`Loading listing ${editPid}...`} size="lg" />
+      </div>
+    );
+  }
+
+  // 0. UNAUTHORIZED EDIT ATTEMPT
+  if (editUnauthorized) {
+    return (
+      <div className="bg-[#050806] text-gray-100 min-h-screen py-16 flex items-center justify-center">
+        <div className="max-w-xl mx-auto px-4 text-center space-y-6">
+          <div className="w-16 h-16 rounded-3xl bg-rose-950/40 border border-rose-800/80 text-rose-400 flex items-center justify-center mx-auto shadow-xl">
+            <AlertTriangle size={32} />
+          </div>
+
+          <div className="space-y-2">
+            <span className="px-3 py-1 rounded-full bg-rose-950/80 border border-rose-800/80 text-rose-400 text-[11px] font-extrabold uppercase tracking-wider">
+              Permission Denied
+            </span>
+            <h1 className="text-2xl sm:text-4xl font-extrabold text-white">Cannot Edit This Listing</h1>
+            <p className="text-xs sm:text-sm text-gray-300 leading-relaxed max-w-md mx-auto">
+              You do not have permission to edit listing <strong className="text-rose-400 font-mono">{editPid}</strong>. You can only modify property listings posted under your own account.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+            <Link
+              href="/dashboard?tab=my-properties"
+              className="w-full sm:w-auto px-8 py-3.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs rounded-full shadow-lg transition-all uppercase tracking-wider cursor-pointer text-center"
+            >
+              Back to My Properties
+            </Link>
+            <Link
+              href="/"
+              className="w-full sm:w-auto px-6 py-3.5 bg-[#09110c] hover:bg-[#121c16] border border-emerald-950 text-gray-300 hover:text-white font-bold text-xs rounded-full transition-colors text-center"
+            >
+              Back to Home
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // 1. UNLOGINED / UNREGISTERED USER WARNING GATE
   if (!user) {
@@ -780,18 +1059,31 @@ export default function PostPropertyPage() {
       <div className="max-w-3xl mx-auto px-3.5 sm:px-6 lg:px-8 space-y-6 sm:space-y-8">
         {/* Header */}
         <div className="text-center space-y-2">
-          <div className="inline-flex items-center space-x-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#0a2618] border border-emerald-800/60 text-emerald-400 text-[10px] sm:text-xs font-bold uppercase tracking-wider max-w-full">
-            <PlusCircle size={13} className="shrink-0" />
-            <span className="truncate">0% Commission • Free Property Listing</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white">Post Your Property For Free</h1>
-          <p className="text-xs text-gray-400 max-w-md mx-auto">Connect directly with thousands of verified tenants & buyers in Chandigarh Tricity</p>
+          {isEditMode ? (
+            <>
+              <div className="inline-flex items-center space-x-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#0a2618] border border-emerald-800/60 text-emerald-400 text-[10px] sm:text-xs font-bold uppercase tracking-wider max-w-full">
+                <Edit3 size={13} className="shrink-0" />
+                <span className="truncate">Editing Listing • {initialLoadedPid || editPid}</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white">Edit Your Property Listing</h1>
+              <p className="text-xs text-gray-400 max-w-md mx-auto">Update your listing's photos, pricing, amenities, and details anytime</p>
+            </>
+          ) : (
+            <>
+              <div className="inline-flex items-center space-x-1.5 px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-[#0a2618] border border-emerald-800/60 text-emerald-400 text-[10px] sm:text-xs font-bold uppercase tracking-wider max-w-full">
+                <PlusCircle size={13} className="shrink-0" />
+                <span className="truncate">0% Commission • Free Property Listing</span>
+              </div>
+              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white">Post Your Property For Free</h1>
+              <p className="text-xs text-gray-400 max-w-md mx-auto">Connect directly with thousands of verified tenants & buyers in Chandigarh Tricity</p>
+            </>
+          )}
         </div>
 
         {/* Form Wizard Container */}
         <div className="bg-[#0a110d] rounded-2xl sm:rounded-3xl border border-emerald-950/90 p-4 sm:p-8 shadow-xl">
           {/* VERIFICATION BLOCK NOTICE FOR UNVERIFIED OWNERS */}
-          {!isVerifiedOwner && step !== 4 ? (
+          {!isVerifiedOwner && !isEditMode && step !== 4 ? (
             <div className="bg-[#121609] border border-amber-800/80 rounded-2xl p-5 sm:p-6 text-center space-y-4 my-2">
               <div className="w-12 h-12 rounded-2xl bg-amber-900/40 text-amber-400 flex items-center justify-center mx-auto border border-amber-700/60 shadow-lg">
                 <ShieldCheck size={24} />
@@ -952,10 +1244,11 @@ export default function PostPropertyPage() {
                     {category === 'sell' || category === 'buy' ? 'Expected Sale Price (₹) *' : isCommercial ? 'Monthly Rent (₹) *' : 'Monthly Rent (₹) *'}
                   </label>
                   <input
-                    type="number"
+                    type="text"
                     required
                     value={price ?? ''}
-                    onChange={(e) => setPrice(e.target.value ? Number(e.target.value) : '')}
+                    onChange={(e) => setPrice(e.target.value.replace(/[^0-9,\-\s]/g, ''))}
+                    placeholder="e.g. 20000 or 20000-21000"
                     className="w-full px-3.5 sm:px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white font-mono focus:border-emerald-500 focus:outline-none font-bold"
                   />
                 </div>
@@ -963,9 +1256,10 @@ export default function PostPropertyPage() {
                 <div>
                   <label className="block text-gray-300 font-semibold mb-1">Security Deposit (₹)</label>
                   <input
-                    type="number"
+                    type="text"
                     value={deposit ?? ''}
-                    onChange={(e) => setDeposit(e.target.value ? Number(e.target.value) : '')}
+                    onChange={(e) => setDeposit(e.target.value.replace(/[^0-9,\-\s]/g, ''))}
+                    placeholder="e.g. 20000 or 20000-21000"
                     className="w-full px-3.5 sm:px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white font-mono focus:border-emerald-500 focus:outline-none font-bold"
                   />
                 </div>
@@ -974,7 +1268,7 @@ export default function PostPropertyPage() {
               <button
                 type="button"
                 onClick={() => {
-                  if (!title || !locality || !price) {
+                  if (!title || !locality || !String(price).trim()) {
                     showToast('Please enter title, locality, and price');
                     return;
                   }
@@ -1016,6 +1310,7 @@ export default function PostPropertyPage() {
                       onChange={(e) => setBedrooms(Number(e.target.value))}
                       className="w-full px-3.5 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white focus:border-emerald-500 focus:outline-none cursor-pointer"
                     >
+                      <option value={0.5}>1 RK</option>
                       <option value={1}>1 BHK</option>
                       <option value={2}>2 BHK</option>
                       <option value={3}>3 BHK</option>
@@ -1062,11 +1357,11 @@ export default function PostPropertyPage() {
                       const value = e.target.value;
 
                       if (value.length <= 8) {
-                        setAreaSqFt(Number(value));
+                        setAreaSqFt(value ? Number(value) : '');
                       }
                     }}
                     placeholder={isCommercial ? "e.g. 1500" : "e.g. 1100"}
-                    className="w-full px-3.5 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white font-mono focus:border-emerald-500 focus:outline-none font-bold"
+                    className="w-full px-3.5 sm:px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white font-mono focus:border-emerald-500 focus:outline-none font-bold"
                   />
                 </div>
 
@@ -1090,22 +1385,102 @@ export default function PostPropertyPage() {
                 <label className="block text-gray-300 font-semibold mb-2">
                   {isCommercial ? 'Select Commercial Amenities & Facilities' : 'Select Amenities Available'}
                 </label>
+
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {availableAmenities.map((amenity) => (
-                    <button
-                      key={amenity}
-                      type="button"
-                      onClick={() => toggleAmenity(amenity)}
-                      className={`p-2.5 rounded-xl text-xs font-semibold text-left flex items-center justify-between border transition-all cursor-pointer ${selectedAmenities.includes(amenity)
-                        ? 'bg-[#0e261a] text-emerald-400 border-emerald-700/80'
-                        : 'bg-[#050806] text-gray-400 border-emerald-950 hover:text-white'
+                  {allAvailableAmenities.map((amenity) => {
+                    const isSelected = selectedAmenities.includes(amenity);
+                    const isCustom = customAmenities.includes(amenity) || (!baseAmenities.includes(amenity));
+
+                    return (
+                      <button
+                        key={amenity}
+                        type="button"
+                        onClick={() => toggleAmenity(amenity)}
+                        className={`p-2.5 rounded-xl text-xs font-semibold text-left flex items-center justify-between border transition-all cursor-pointer group ${
+                          isSelected
+                            ? 'bg-[#0e261a] text-emerald-400 border-emerald-700/80 shadow-[0_0_15px_rgba(16,185,129,0.1)]'
+                            : 'bg-[#050806] text-gray-400 border-emerald-950 hover:text-white hover:border-emerald-900'
                         }`}
-                    >
-                      <span className="truncate pr-1">{amenity}</span>
-                      {selectedAmenities.includes(amenity) && <Check size={14} className="text-emerald-400 shrink-0" />}
-                    </button>
-                  ))}
+                      >
+                        <span className="truncate pr-1 flex items-center space-x-1.5">
+                          <span>{amenity}</span>
+                          {isCustom && (
+                            <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-800/60">
+                              custom
+                            </span>
+                          )}
+                        </span>
+                        <div className="flex items-center space-x-1 shrink-0">
+                          {isSelected && <Check size={14} className="text-emerald-400 shrink-0" />}
+                          {isCustom && (
+                            <span
+                              onClick={(e) => handleRemoveCustomAmenity(amenity, e)}
+                              title="Remove custom amenity"
+                              className="text-gray-500 hover:text-rose-400 p-0.5 rounded transition-colors"
+                            >
+                              <X size={12} />
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+
+                  {/* "+ Add More Amenities" Button placed right after all amenities in grid */}
+                  <button
+                    type="button"
+                    onClick={() => setIsAddingCustomAmenity(prev => !prev)}
+                    className={`p-2.5 rounded-xl text-xs font-bold text-left flex items-center justify-between border border-dashed transition-all cursor-pointer ${
+                      isAddingCustomAmenity
+                        ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500 shadow-md'
+                        : 'bg-[#06170e]/80 hover:bg-[#0c2719] text-emerald-400 hover:text-emerald-300 border-emerald-700/80 hover:border-emerald-500'
+                    }`}
+                  >
+                    <span className="truncate pr-1 flex items-center space-x-1.5">
+                      <Plus size={14} className="stroke-[2.5] text-emerald-400 shrink-0" />
+                      <span>Add More Amenities</span>
+                    </span>
+                  </button>
                 </div>
+
+                {/* Add Custom Amenity Input Bar */}
+                {isAddingCustomAmenity && (
+                  <form
+                    onSubmit={handleAddCustomAmenity}
+                    className="mt-3 p-3 rounded-2xl bg-[#06140c] border border-emerald-800/80 flex flex-col sm:flex-row items-stretch sm:items-center gap-2 animate-in fade-in duration-200"
+                  >
+                    <div className="flex-1 relative">
+                      <input
+                        type="text"
+                        value={newAmenityInput}
+                        onChange={(e) => setNewAmenityInput(e.target.value)}
+                        placeholder="e.g. Microwave, Swimming Pool, Study Table, Sofa..."
+                        autoFocus
+                        maxLength={35}
+                        className="w-full px-3.5 py-2.5 bg-[#030805] border border-emerald-900 rounded-xl text-white text-xs placeholder-gray-500 focus:border-emerald-500 focus:outline-none"
+                      />
+                    </div>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <button
+                        type="submit"
+                        disabled={!newAmenityInput.trim()}
+                        className="flex-1 sm:flex-initial px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs rounded-xl shadow-md transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        + Add Amenity
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsAddingCustomAmenity(false);
+                          setNewAmenityInput('');
+                        }}
+                        className="px-3.5 py-2.5 bg-[#0b1610] text-gray-400 hover:text-white border border-emerald-950 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
 
               <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-3 pt-2">
@@ -1135,9 +1510,9 @@ export default function PostPropertyPage() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-950 pb-3">
                   <div>
                     <label className="block text-white font-bold text-xs">
-                      Property Photos <span className="text-rose-400">*</span> ({images.length} / {maxSellImages})
+                      Property Photos ({images.length} / {maxSellImages})
                     </label>
-                    <p className="text-[11px] text-gray-400">At least 1 photo required • Upload up to {maxSellImages} photos</p>
+                    <p className="text-[11px] text-gray-400">Upload up to {maxSellImages} photos (optional)</p>
                   </div>
 
                   {/* Mode Selector Tabs */}
@@ -1345,6 +1720,168 @@ export default function PostPropertyPage() {
 
               </div>
 
+              {/* Walkthrough Video Tour Section (Optional) */}
+              <div className="bg-[#050806] border border-emerald-950 rounded-2xl p-3.5 sm:p-5 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-emerald-950 pb-3">
+                  <div className="flex items-center space-x-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-[#0e261a] border border-emerald-800/80 flex items-center justify-center text-emerald-400 shrink-0">
+                      <Video size={16} />
+                    </div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <label className="block text-white font-bold text-xs">
+                          Property Video Tour
+                        </label>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-800/60 text-emerald-400 text-[10px] font-extrabold flex items-center space-x-1">
+                          <Sparkles size={10} />
+                          <span>3x More Views</span>
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-400">Upload a 30–90 sec walkthrough video or paste a YouTube / Drive link (Optional)</p>
+                    </div>
+                  </div>
+
+                  {/* Video Mode Selector Tabs */}
+                  {videos.length === 0 && (
+                    <div className="flex items-center space-x-1 bg-[#0a110d] p-1 rounded-xl border border-emerald-950 text-[11px] w-full sm:w-auto">
+                      <button
+                        type="button"
+                        onClick={() => setVideoTab('file')}
+                        className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${videoTab === 'file'
+                          ? 'bg-emerald-500 text-black shadow'
+                          : 'text-gray-400 hover:text-white'
+                          }`}
+                      >
+                        <Upload size={12} className="shrink-0" />
+                        <span>Upload Video</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setVideoTab('url')}
+                        className={`flex-1 sm:flex-initial px-3 py-1.5 rounded-lg font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer ${videoTab === 'url'
+                          ? 'bg-emerald-500 text-black shadow'
+                          : 'text-gray-400 hover:text-white'
+                          }`}
+                      >
+                        <Film size={12} className="shrink-0" />
+                        <span>Video Link</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {videos.length === 0 ? (
+                  videoTab === 'file' ? (
+                    /* Video Drag & Drop Upload Zone */
+                    videoUploading ? (
+                      <div className="border border-emerald-500/80 bg-[#080d0a] rounded-xl p-6 text-center space-y-3">
+                        <Loader2 size={24} className="text-emerald-400 animate-spin mx-auto" />
+                        <div className="space-y-1">
+                          <p className="text-xs font-bold text-white">Uploading video tour to Cloudinary...</p>
+                          <div className="w-full max-w-xs mx-auto bg-gray-800 rounded-full h-2 overflow-hidden">
+                            <div
+                              className="bg-emerald-500 h-full transition-all duration-300 rounded-full"
+                              style={{ width: `${videoProgress}%` }}
+                            />
+                          </div>
+                          <span className="text-[11px] font-mono text-emerald-400 font-bold">{videoProgress}% completed</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="relative border-2 border-dashed border-emerald-900/80 hover:border-emerald-500/80 transition-colors bg-[#080d0a] rounded-xl p-4 sm:p-6 text-center group cursor-pointer">
+                        <input
+                          type="file"
+                          accept="video/mp4,video/quicktime,video/webm"
+                          onChange={handleVideoFileUpload}
+                          disabled={videoUploading}
+                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                        />
+                        <div className="flex flex-col items-center space-y-2">
+                          <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-[#0e261a] border border-emerald-800/80 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
+                            <Video size={20} className="sm:w-[22px] sm:h-[22px]" />
+                          </div>
+                          <span className="text-xs font-bold text-gray-200 group-hover:text-emerald-400 transition-colors">
+                            Click to browse or drop property walkthrough video
+                          </span>
+                          <span className="text-[10px] text-gray-500">
+                            Supports MP4, MOV, WebM • Max 50 MB • Direct Cloudinary CDN streaming
+                          </span>
+                        </div>
+                      </div>
+                    )
+                  ) : (
+                    /* Video URL input fallback */
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="url"
+                        value={videoUrlInput ?? ''}
+                        onChange={(e) => setVideoUrlInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddVideoUrl();
+                          }
+                        }}
+                        placeholder="Paste YouTube / Vimeo / Drive video URL (e.g. https://youtu.be/...)"
+                        className="flex-1 min-w-0 px-3 sm:px-4 py-2.5 bg-[#080d0a] border border-emerald-900/80 rounded-xl text-white font-mono focus:border-emerald-500 focus:outline-none text-xs"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddVideoUrl}
+                        disabled={!videoUrlInput.trim()}
+                        className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-extrabold rounded-xl transition-colors text-xs flex items-center space-x-1 cursor-pointer shrink-0"
+                      >
+                        <Plus size={14} />
+                        <span>Add Video</span>
+                      </button>
+                    </div>
+                  )
+                ) : (
+                  /* Attached Video Preview Card */
+                  <div className="relative rounded-2xl overflow-hidden border border-emerald-800/80 bg-black/80 p-3 flex flex-col sm:flex-row items-center gap-4 shadow-lg">
+                    <div className="w-full sm:w-48 aspect-video rounded-xl overflow-hidden bg-black relative shrink-0 flex items-center justify-center border border-emerald-950">
+                      {videos[0].includes('youtube.com') || videos[0].includes('youtu.be') ? (
+                        <div className="flex flex-col items-center justify-center text-center p-2">
+                          <Play size={24} className="text-red-500 mb-1" />
+                          <span className="text-[10px] text-gray-300 font-bold truncate max-w-[140px]">YouTube Video</span>
+                        </div>
+                      ) : (
+                        <video
+                          src={videos[0]}
+                          controls
+                          playsInline
+                          preload="metadata"
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-w-0 text-left space-y-1">
+                      <div className="flex items-center space-x-2">
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-400 text-[10px] font-bold border border-emerald-500/30">
+                          Video Tour Ready
+                        </span>
+                        <span className="text-[11px] text-gray-400 truncate max-w-[200px] sm:max-w-xs font-mono">
+                          {videos[0]}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-300">
+                        This video tour will be featured on your property listing and attract verified tenants!
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveVideo(0)}
+                      className="px-3 py-2 rounded-xl bg-red-950/80 hover:bg-red-900 border border-red-800/80 text-red-300 hover:text-white text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer shrink-0"
+                    >
+                      <Trash2 size={13} />
+                      <span>Remove</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
               {/* Owner Details - 1 column on mobile, 2 columns on desktop */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                 <div>
@@ -1400,7 +1937,7 @@ export default function PostPropertyPage() {
                   {submitting ? (
                     <>
                       <Loader2 size={16} className="animate-spin" />
-                      <span>Publishing Listing...</span>
+                      <span>{isEditMode ? 'Saving Changes...' : 'Publishing Listing...'}</span>
                     </>
                   ) : isUploadingImages ? (
                     <>
@@ -1408,7 +1945,7 @@ export default function PostPropertyPage() {
                       <span>Uploading Photos to Cloudinary...</span>
                     </>
                   ) : (
-                    <span>Publish Property Listing FREE</span>
+                    <span>{isEditMode ? 'Save Listing Changes' : 'Publish Property Listing FREE'}</span>
                   )}
                 </button>
               </div>
@@ -1418,22 +1955,36 @@ export default function PostPropertyPage() {
           {/* STEP 4: Success View */}
           {step === 4 && createdProperty && (
             <div className="text-center py-8 space-y-4">
-              <div className="w-16 h-16 bg-[#261d0a] text-amber-400 border border-amber-800 rounded-full flex items-center justify-center mx-auto">
-                <Clock size={36} />
+              <div className={`w-16 h-16 ${isEditMode ? 'bg-[#0a2618] text-emerald-400 border border-emerald-800' : 'bg-[#261d0a] text-amber-400 border border-amber-800'} rounded-full flex items-center justify-center mx-auto shadow-lg`}>
+                {isEditMode ? <CheckCircle2 size={36} /> : <Clock size={36} />}
               </div>
-              <h2 className="text-2xl font-extrabold text-white">Submitted for Admin Verification!</h2>
+              <h2 className="text-2xl font-extrabold text-white">
+                {isEditMode ? 'Listing Updated Successfully!' : 'Submitted for Admin Verification!'}
+              </h2>
               <p className="text-xs text-gray-300 max-w-md mx-auto leading-relaxed">
-                Your property listing <strong className="text-emerald-400 font-mono">{createdProperty.pid}</strong> has been submitted to the Admin Moderation Queue.
+                {isEditMode ? (
+                  <>All updates to property <strong className="text-emerald-400 font-mono">{createdProperty.pid || editPid}</strong> have been saved successfully.</>
+                ) : (
+                  <>Your property listing <strong className="text-emerald-400 font-mono">{createdProperty.pid}</strong> has been submitted to the Admin Moderation Queue.</>
+                )}
               </p>
-              <div className="p-4 bg-[#0d1c14] border border-emerald-900/80 rounded-2xl max-w-md mx-auto text-xs text-emerald-300 font-medium">
-                🛡️ <strong>Pending Verification</strong>: Once our admin team verifies your listing details, it will automatically go live on the PROPZY website with 0% brokerage.
-              </div>
-              <div className="flex items-center justify-center space-x-4 pt-4">
+              {!isEditMode && (
+                <div className="p-4 bg-[#0d1c14] border border-emerald-900/80 rounded-2xl max-w-md mx-auto text-xs text-emerald-300 font-medium">
+                  🛡️ <strong>Pending Verification</strong>: Once our admin team verifies your listing details, it will automatically go live on the PROPZY website with 0% brokerage.
+                </div>
+              )}
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-4">
                 <button
-                  onClick={() => router.push(`/dashboard?tab=my-properties`)}
+                  onClick={() => router.push(`/properties/${createdProperty.pid || editPid}`)}
                   className="px-6 cursor-pointer py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs rounded-full shadow-lg transition-all"
                 >
-                  Track Status in Dashboard
+                  View Updated Listing
+                </button>
+                <button
+                  onClick={() => router.push(`/dashboard?tab=my-properties`)}
+                  className="px-6 cursor-pointer py-3 bg-[#09110c] hover:bg-[#121c16] border border-emerald-950 text-gray-300 hover:text-white font-bold text-xs rounded-full transition-colors"
+                >
+                  Back to My Dashboard
                 </button>
               </div>
             </div>
@@ -1441,5 +1992,17 @@ export default function PostPropertyPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PostPropertyPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-[#050806] flex items-center justify-center">
+        <BrandSpinner message="Loading property wizard..." size="lg" />
+      </div>
+    }>
+      <PostPropertyContent />
+    </Suspense>
   );
 }

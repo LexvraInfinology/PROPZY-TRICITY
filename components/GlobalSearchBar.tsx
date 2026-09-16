@@ -16,6 +16,8 @@ interface SuggestionItem {
   type: string;
   verified?: boolean;
   images?: string[];
+  videos?: string[];
+  videoThumbnail?: string;
 }
 
 interface GlobalSearchBarProps {
@@ -197,7 +199,18 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
 
               {suggestions.map((item, idx) => {
                 const isSelected = idx === selectedIndex;
-                const thumb = item.images && item.images.length > 0 ? item.images[0] : null;
+                const getVideoPoster = (url?: string) => {
+                  if (!url) return null;
+                  if (url.includes('res.cloudinary.com')) {
+                    return url.replace(/\.(mp4|mov|webm|mkv|avi|m4v)(\?.*)?$/i, '.jpg').replace('/video/upload/', '/video/upload/so_0,q_auto,f_auto/');
+                  }
+                  const ytMatch = url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|shorts\/))([a-zA-Z0-9_-]{11})/);
+                  if (ytMatch && ytMatch[1]) {
+                    return `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+                  }
+                  return null;
+                };
+                const thumb = (item.images && item.images.length > 0 ? item.images[0] : null) || item.videoThumbnail || (item.videos && item.videos[0] ? getVideoPoster(item.videos[0]) : null);
 
                 return (
                   <div

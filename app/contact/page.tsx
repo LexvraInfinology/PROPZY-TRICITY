@@ -9,11 +9,13 @@ import {
   Clock,
   Send,
   CheckCircle,
+  AlertCircle,
   Instagram,
   ArrowRight
 } from 'lucide-react';
 import { CallToActionBanner } from '@/components/CallToActionBanner';
 import { notifyAdminSync } from '@/lib/adminCache';
+import { useApp } from '@/context/AppContext';
 
 const WhatsAppIcon: React.FC<{ size?: number; className?: string }> = ({ size = 18, className }) => (
   <svg
@@ -28,6 +30,7 @@ const WhatsAppIcon: React.FC<{ size?: number; className?: string }> = ({ size = 
 );
 
 export default function ContactPage() {
+  const { showToast } = useApp();
   const [formData, setFormData] = useState({
     fullName: '',
     workEmail: '',
@@ -37,11 +40,13 @@ export default function ContactPage() {
   });
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.fullName || !formData.workEmail || !formData.message) return;
     setLoading(true);
+    setErrorMessage(null);
 
     try {
       const res = await fetch('/api/contacts', {
@@ -57,16 +62,20 @@ export default function ContactPage() {
       });
 
       const data = await res.json();
-      if (data.success) {
+      if (res.ok && data.success) {
         notifyAdminSync('contacts');
         setSubmitted(true);
+        showToast('Your message has been sent successfully!', 'success');
       } else {
-        setSubmitted(true);
+        const errorText = data.message || 'Failed to submit contact form. Please try again or email us directly.';
+        setErrorMessage(errorText);
+        showToast(errorText, 'error');
       }
     } catch (err) {
-      console.warn('Contact submission fallback:', err);
-      notifyAdminSync('contacts');
-      setSubmitted(true);
+      console.error('Contact submission error:', err);
+      const errorText = 'Network error occurred. Please try again or reach us at propzytricity@gmail.com.';
+      setErrorMessage(errorText);
+      showToast(errorText, 'error');
     } finally {
       setLoading(false);
     }
@@ -148,6 +157,13 @@ export default function ContactPage() {
               </div>
             ) : (
               <form onSubmit={handleSubmit} className="space-y-5">
+                {errorMessage && (
+                  <div className="p-3.5 rounded-xl bg-red-950/50 border border-red-800/80 text-red-200 text-xs flex items-center space-x-2">
+                    <AlertCircle size={16} className="text-red-400 shrink-0" />
+                    <span>{errorMessage}</span>
+                  </div>
+                )}
+
                 {/* Row 1: Full Name & Work Email */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
@@ -249,14 +265,29 @@ export default function ContactPage() {
               </h3>
 
               <div className="space-y-4">
+                {/* Operating Name */}
+                <div className="flex items-start space-x-3.5">
+                  <div className="w-9 h-9 rounded-full bg-[#0d1d13] border border-emerald-800/60 flex items-center justify-center text-emerald-400 shrink-0 mt-0.5">
+                    <CheckCircle size={16} />
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold font-mono text-gray-400 uppercase tracking-wider">OPERATING NAME</div>
+                    <div className="text-xs font-semibold text-white mt-0.5">Propzy Tricity</div>
+                  </div>
+                </div>
+
                 {/* Email */}
                 <div className="flex items-start space-x-3.5">
                   <div className="w-9 h-9 rounded-full bg-[#0d1d13] border border-emerald-800/60 flex items-center justify-center text-emerald-400 shrink-0 mt-0.5">
                     <Mail size={16} />
                   </div>
                   <div>
-                    <div className="text-[10px] font-bold font-mono text-gray-400 uppercase tracking-wider">EMAIL</div>
-                    <div className="text-xs font-semibold text-white mt-0.5">infinologylexvra@gmail.com</div>
+                    <div className="text-[10px] font-bold font-mono text-gray-400 uppercase tracking-wider">OFFICIAL SUPPORT EMAIL</div>
+                    <div className="text-xs font-semibold text-white mt-0.5">
+                      <a href="mailto:propzytricity@gmail.com" className="hover:text-emerald-400 transition-colors">
+                        propzytricity@gmail.com
+                      </a>
+                    </div>
                   </div>
                 </div>
 
@@ -266,30 +297,36 @@ export default function ContactPage() {
                     <Phone size={16} />
                   </div>
                   <div>
-                    <div className="text-[10px] font-bold font-mono text-gray-400 uppercase tracking-wider">PHONE</div>
-                    <div className="text-xs font-semibold text-white mt-0.5">9317902609</div>
+                    <div className="text-[10px] font-bold font-mono text-gray-400 uppercase tracking-wider">PHONE & HELPLINE</div>
+                    <div className="text-xs font-semibold text-white mt-0.5">
+                      <a href="tel:+919317902609" className="hover:text-emerald-400 transition-colors">
+                        +91 93179 02609
+                      </a>
+                    </div>
                   </div>
                 </div>
 
-                {/* Location */}
+                {/* Physical Address */}
                 <div className="flex items-start space-x-3.5">
                   <div className="w-9 h-9 rounded-full bg-[#0d1d13] border border-emerald-800/60 flex items-center justify-center text-emerald-400 shrink-0 mt-0.5">
                     <MapPin size={16} />
                   </div>
                   <div>
-                    <div className="text-[10px] font-bold font-mono text-gray-400 uppercase tracking-wider">MOHALI</div>
-                    <div className="text-xs font-semibold text-white mt-0.5">Sector 75, Phase-8A, Mohali, Punjab</div>
+                    <div className="text-[10px] font-bold font-mono text-gray-400 uppercase tracking-wider">REGISTERED PHYSICAL ADDRESS</div>
+                    <div className="text-xs font-semibold text-white mt-0.5 leading-relaxed">
+                      4th Floor, D 256, Industrial Area, Sector 75, Sahibzada Ajit Singh Nagar, Punjab 140307, India
+                    </div>
                   </div>
                 </div>
 
-                {/* Hours */}
+                {/* Support Hours */}
                 <div className="flex items-start space-x-3.5">
                   <div className="w-9 h-9 rounded-full bg-[#0d1d13] border border-emerald-800/60 flex items-center justify-center text-emerald-400 shrink-0 mt-0.5">
                     <Clock size={16} />
                   </div>
                   <div>
-                    <div className="text-[10px] font-bold font-mono text-gray-400 uppercase tracking-wider">HOURS</div>
-                    <div className="text-xs font-semibold text-white mt-0.5">Mon-Fri, 9AM-6PM</div>
+                    <div className="text-[10px] font-bold font-mono text-gray-400 uppercase tracking-wider">SUPPORT OPERATING HOURS</div>
+                    <div className="text-xs font-semibold text-white mt-0.5">Monday – Saturday: 9:00 AM – 7:00 PM IST</div>
                   </div>
                 </div>
               </div>
@@ -324,6 +361,35 @@ export default function ContactPage() {
 
                 </a>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Plain Text Corporate & Merchant Compliance Information */}
+        <div className="mt-8 p-6 rounded-2xl bg-[#060c08] border border-emerald-900/60 space-y-3">
+          <div className="flex items-center space-x-2 text-xs font-mono font-bold uppercase tracking-wider text-emerald-400">
+            <span>Corporate & Merchant Verification Information</span>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-gray-300">
+            <div>
+              <span className="text-gray-400 font-mono text-[11px] block">OPERATING / TRADE NAME:</span>
+              <span className="font-semibold text-white">Propzy Tricity</span>
+            </div>
+            <div>
+              <span className="text-gray-400 font-mono text-[11px] block">OFFICIAL SUPPORT EMAIL:</span>
+              <span className="font-semibold text-white">propzytricity@gmail.com</span>
+            </div>
+            <div>
+              <span className="text-gray-400 font-mono text-[11px] block">DIRECT HELPLINE:</span>
+              <span className="font-semibold text-white">+91 93179 02609</span>
+            </div>
+            <div>
+              <span className="text-gray-400 font-mono text-[11px] block">OPERATING HOURS:</span>
+              <span className="font-semibold text-white">Monday to Saturday: 9:00 AM – 7:00 PM IST</span>
+            </div>
+            <div className="md:col-span-2">
+              <span className="text-gray-400 font-mono text-[11px] block">COMPLETE REGISTERED OFFICE ADDRESS:</span>
+              <span className="font-semibold text-white">4th Floor, D 256, Industrial Area, Sector 75, Sahibzada Ajit Singh Nagar, Punjab 140307, India</span>
             </div>
           </div>
         </div>

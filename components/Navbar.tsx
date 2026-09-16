@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { Search, Heart, User, ChevronDown, Home, Menu, X, ShieldCheck, Plus } from 'lucide-react';
+import { Search, Heart, User, ChevronDown, Home, Menu, X, ShieldCheck, Plus, Sparkles, Zap } from 'lucide-react';
 import { GlobalSearchBar } from '@/components/GlobalSearchBar';
 import { useApp } from '@/context/AppContext';
 
@@ -33,9 +33,7 @@ function NavbarContent() {
   }, []);
 
   useEffect(() => {
-    if (pathname === '/post-property') {
-      setActiveItem('sell');
-    } else if (pathname === '/about') {
+    if (pathname === '/about') {
       setActiveItem('about');
     } else if (pathname === '/contact') {
       setActiveItem('contact');
@@ -93,13 +91,12 @@ function NavbarContent() {
     { key: 'properties', label: 'All Properties', href: '/properties' },
     { key: 'buy', label: 'Buy', href: '/properties?category=buy' },
     { key: 'rent', label: 'Rent', href: '/properties?category=rent' },
-    { key: 'sell', label: 'Sell', href: '/post-property' },
     { key: 'about', label: 'About', href: '/about' },
     { key: 'contact', label: 'Contact', href: '/contact' },
   ];
 
-  // Hide Navbar completely on Admin portal and Plans routes (called after all hook declarations)
-  if (pathname && (pathname.startsWith('/admin') || pathname.startsWith('/plans'))) {
+  // Hide Navbar completely on Admin portal, Plans, and Pricing routes (called after all hook declarations)
+  if (pathname && (pathname.startsWith('/admin') || pathname.startsWith('/plans') || pathname.startsWith('/pricing'))) {
     return null;
   }
 
@@ -183,7 +180,7 @@ function NavbarContent() {
             {currentUser?.role === 'owner' && (
               <Link
                 href="/post-property"
-                onClick={() => setActiveItem('sell')}
+                onClick={() => setActiveItem('')}
                 className="hidden sm:inline-flex items-center justify-center space-x-1.5 px-4 py-2 h-9 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs shadow-md shadow-emerald-500/25 hover:shadow-emerald-500/40 transition-all whitespace-nowrap shrink-0 cursor-pointer active:scale-95"
               >
                 <Plus size={14} className="stroke-[2.5]" />
@@ -220,100 +217,124 @@ function NavbarContent() {
                   <span className="hidden sm:inline font-semibold">
                     {currentUser.name?.split(' ')[0] || 'User'}
                   </span>
+                  {currentUser.role !== 'owner' && currentUser.role !== 'admin' && typeof currentUser.credits === 'number' && (
+                    <span className="hidden md:inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-950 text-[10px] font-mono font-bold text-emerald-300 border border-emerald-800/80">
+                      ⚡ {currentUser.credits}
+                    </span>
+                  )}
                   <ChevronDown size={14} className={`text-emerald-400 transition-transform ${isProfileMenuOpen ? 'rotate-180' : ''}`} />
                 </button>
                 {/* Profile Dropdown */}
                 {isProfileMenuOpen && (
                   <div className="absolute right-0 top-full mt-2 w-56 bg-[#0a110d] rounded-2xl shadow-2xl border border-emerald-900/80 p-2 space-y-1 z-[60] backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-200">
-                    {currentUser.role === 'admin' ? (
-                      <>
-                        <div className="px-4 py-2 border-b border-emerald-950 text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider">
-                          🛡️ Admin Portal
+                  {currentUser.role === 'admin' ? (
+                    <>
+                      <div className="px-4 py-2 border-b border-emerald-950 text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider">
+                        🛡️ Admin Portal
+                      </div>
+                      <Link
+                        href="/admin"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                        className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
+                      >
+                        Admin Overview
+                      </Link>
+                      <Link
+                        href="/admin/properties"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                        className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
+                      >
+                        Verification Queue
+                      </Link>
+                      <Link
+                        href="/admin/inquiries"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                        className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
+                      >
+                        Tenant Leads
+                      </Link>
+                    </>
+                  ) : currentUser.role === 'owner' ? (
+                    <>
+                      <div className="px-4 py-2 border-b border-emerald-950 text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider">
+                        Owner Dashboard
+                      </div>
+                      <Link
+                        href="/dashboard?tab=account"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                        className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
+                      >
+                        Account Details
+                      </Link>
+                      <Link
+                        href="/dashboard?tab=my-properties"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                        className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
+                      >
+                        My Properties
+                      </Link>
+                      <Link
+                        href="/dashboard?tab=wishlist"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                        className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
+                      >
+                        Saved Property
+                      </Link>
+                      <Link
+                        href="/dashboard?tab=inquiries"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                        className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
+                      >
+                        Tenant Inquiries
+                      </Link>
+                    </>
+                  ) : (
+                    <>
+                      <div className="px-4 py-2 border-b border-emerald-950 flex items-center justify-between">
+                        <div>
+                          <div className="text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider">
+                            {currentUser.role === 'sales executive' || currentUser.email?.toLowerCase().trim() === 'pawanpropzy@gmail.com' ? '👔 Executive' : 'Tenant Profile'}
+                          </div>
+                          <div className="text-[11px] font-bold text-amber-300 mt-0.5 flex items-center space-x-1">
+                            <Sparkles size={10} className="text-amber-400" />
+                            <span>{currentUser.activePlan || 'Standard Plan'}</span>
+                          </div>
                         </div>
-                        <Link
-                          href="/admin"
-                          onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
-                        >
-                          Admin Overview
-                        </Link>
-                        <Link
-                          href="/admin/properties"
-                          onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
-                        >
-                          Verification Queue
-                        </Link>
-                        <Link
-                          href="/admin/inquiries"
-                          onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
-                        >
-                          Tenant Leads
-                        </Link>
-                      </>
-                    ) : currentUser.role === 'owner' ? (
-                      <>
-                        <div className="px-4 py-2 border-b border-emerald-950 text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider">
-                          Owner Dashboard
+                        <div className="px-2 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-700/60 text-emerald-300 font-mono text-[11px] font-extrabold flex items-center space-x-1 shadow-sm">
+                          <Zap size={10} className="fill-emerald-400 text-emerald-400" />
+                          <span>{currentUser.credits ?? 0}</span>
                         </div>
-                        <Link
-                          href="/dashboard?tab=account"
-                          onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
-                        >
-                          Account Details
-                        </Link>
-                        <Link
-                          href="/dashboard?tab=my-properties"
-                          onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
-                        >
-                          My Properties
-                        </Link>
-                        <Link
-                          href="/dashboard?tab=wishlist"
-                          onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
-                        >
-                          Saved Property
-                        </Link>
-                      </>
-                    ) : (
-                      <>
-                        <div className="px-4 py-2 border-b border-emerald-950 text-[10px] font-extrabold text-emerald-400 uppercase tracking-wider">
-                          Tenant Profile
-                        </div>
-                        <Link
-                          href="/dashboard?tab=account"
-                          onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
-                        >
-                          Account
-                        </Link>
-                        <Link
-                          href="/dashboard?tab=wishlist"
-                          onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
-                        >
-                          Saved Property
-                        </Link>
-                        <Link
-                          href="/dashboard?tab=billing"
-                          onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
-                        >
-                          Billing History
-                        </Link>
-                        <Link
-                          href="/plans"
-                          onClick={() => setIsProfileMenuOpen(false)}
-                          className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
-                        >
-                          Explore Plans
-                        </Link>
-                      </>
-                    )}
+                      </div>
+                      <Link
+                        href="/dashboard?tab=account"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                        className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
+                      >
+                        Account
+                      </Link>
+                      <Link
+                        href="/dashboard?tab=wishlist"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                        className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
+                      >
+                        Saved Property
+                      </Link>
+                      <Link
+                        href="/dashboard?tab=billing"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                        className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
+                      >
+                        Billing History
+                      </Link>
+                      <Link
+                        href="/plans"
+                        onClick={() => setIsProfileMenuOpen(false)}
+                        className="flex items-center px-4 py-2.5 text-xs font-semibold text-gray-200 rounded-xl hover:bg-emerald-950/60 hover:text-emerald-400 transition-colors"
+                      >
+                        Explore Plans
+                      </Link>
+                    </>
+                  )}
                     <div className="pt-1 border-t border-emerald-950">
                       <button
                         type="button"
@@ -418,12 +439,22 @@ function NavbarContent() {
             ) : (
               <div className="pt-2 border-t border-emerald-950/80 flex items-center justify-between gap-2">
                 <div className="flex items-center space-x-2">
-                  <div className="w-7 h-7 rounded-full bg-emerald-500 text-black font-extrabold flex items-center justify-center text-xs">
+                  <div className="w-8 h-8 rounded-full bg-emerald-500 text-black font-extrabold flex items-center justify-center text-xs shrink-0">
                     {currentUser.name?.charAt(0) || 'U'}
                   </div>
                   <div className="text-xs">
                     <div className="font-bold text-white leading-tight">{currentUser.name}</div>
-                    <div className="text-[10px] text-emerald-400 capitalize">{currentUser.role}</div>
+                    <div className="flex items-center space-x-1.5 text-[10px] mt-0.5">
+                      <span className="text-emerald-400 capitalize">{currentUser.role}</span>
+                      {currentUser.role !== 'owner' && (
+                        <>
+                          <span className="text-gray-500">•</span>
+                          <span className="text-amber-300 font-bold">{currentUser.activePlan || 'Standard Plan'}</span>
+                          <span className="text-gray-500">•</span>
+                          <span className="text-emerald-300 font-mono font-bold">⚡{currentUser.credits ?? 0}</span>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <button

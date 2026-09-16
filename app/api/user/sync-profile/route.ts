@@ -1,18 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { connectToDatabase } from '@/lib/mongodb';
 import User from '@/models/User';
+import { getAuthUser } from '@/lib/auth';
 
 export async function POST(req: NextRequest) {
   try {
-    const { email } = await req.json();
+    const authUser = await getAuthUser(req);
+    if (!authUser) {
+      return NextResponse.json({ success: false, message: 'Unauthorized. Please login.' }, { status: 401 });
+    }
 
-    if (!email) {
-      return NextResponse.json({ success: false, message: 'Email is required' }, { status: 400 });
+    const { email } = await req.json().catch(() => ({}));
+    const targetEmail = (email ? String(email) : authUser.email).toLowerCase().trim();
+
+    // Only allow syncing the authenticated user's profile, unless an admin is requesting
+    if (authUser.role !== 'admin' && authUser.email.toLowerCase().trim() !== targetEmail) {
+      return NextResponse.json({ success: false, message: 'Forbidden. You can only sync your own profile.' }, { status: 403 });
     }
 
     try {
       await connectToDatabase();
-      const dbUser: any = await User.findOne({ email: email.toLowerCase().trim() }).select('-password').lean();
+      const dbUser: any = await User.findOne({ email: targetEmail }).select('-password').lean();
 
       if (dbUser) {
         const currentWishlist: string[] = dbUser.wishlist || [];
@@ -40,18 +48,25 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        const userRole = dbUser.role || 'tenant';
+
         const userProfile = {
           id: dbUser._id?.toString(),
           name: dbUser.name,
           email: dbUser.email,
           phone: dbUser.phone,
-          role: dbUser.role,
+          role: userRole,
           city: dbUser.city || 'Mohali',
           wishlist: sanitizedWishlist,
+          unlockedProperties: Array.isArray(dbUser.unlockedProperties) ? dbUser.unlockedProperties : [],
           ownerVerified: dbUser.ownerVerified || false,
           verificationStatus: dbUser.verificationStatus || 'none',
           electricityBillUrl: dbUser.electricityBillUrl || '',
-          consumerNumber: dbUser.consumerNumber || ''
+          consumerNumber: dbUser.consumerNumber || '',
+          credits: typeof dbUser.credits === 'number' ? dbUser.credits : 0,
+          activePlan: dbUser.activePlan || 'Free',
+          planExpiresAt: dbUser.planExpiresAt ? (typeof dbUser.planExpiresAt.toISOString === 'function' ? dbUser.planExpiresAt.toISOString() : String(dbUser.planExpiresAt)) : undefined,
+          billingHistory: Array.isArray(dbUser.billingHistory) ? dbUser.billingHistory : []
         };
 
         return NextResponse.json({ success: true, user: userProfile });

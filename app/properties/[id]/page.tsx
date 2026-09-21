@@ -15,6 +15,7 @@ import { InquiryModal } from '@/components/InquiryModal';
 import { LazyImage } from '@/components/LazyImage';
 import { BrandSpinner } from '@/components/Loader';
 import { PropertyCard } from '@/components/PropertyCard';
+import { CENTRAL_CONTACT_PHONE } from '@/lib/contactConfig';
 
 export default function PropertyDetailPage() {
   const params = useParams();
@@ -1036,10 +1037,10 @@ export default function PropertyDetailPage() {
                     user.unlockedProperties.includes(id)
                   ))
                 );
-                const displayPhone = unlockedPhone || property.ownerPhone;
-                const cleanPhone = displayPhone ? displayPhone.replace(/\D/g, '') : '';
+                const displayPhone = CENTRAL_CONTACT_PHONE.display;
+                const cleanPhone = CENTRAL_CONTACT_PHONE.intlClean;
 
-                if (isUnlocked && displayPhone) {
+                if (isUnlocked) {
                   return (
                     <div className="space-y-2.5">
                       <div className="p-3.5 bg-emerald-950/60 border border-emerald-800/80 rounded-2xl text-center space-y-1">
@@ -1053,7 +1054,7 @@ export default function PropertyDetailPage() {
                       </div>
 
                       <a
-                        href={`tel:${cleanPhone}`}
+                        href={CENTRAL_CONTACT_PHONE.telUri}
                         className="w-full py-3.5 bg-emerald-500 hover:bg-emerald-400 text-black rounded-2xl font-extrabold text-xs shadow-lg shadow-emerald-500/25 transition-all flex items-center justify-center space-x-2 cursor-pointer active:scale-95"
                       >
                         <PhoneCall size={16} />
@@ -1111,7 +1112,7 @@ export default function PropertyDetailPage() {
                     });
                     const data = await res.json();
                     if (data.success) {
-                      setUnlockedPhone(data.ownerPhone);
+                      setUnlockedPhone(CENTRAL_CONTACT_PHONE.raw);
                       setUnlockedName(data.ownerName);
                       if (typeof data.remainingCredits === 'number') {
                         setUser({

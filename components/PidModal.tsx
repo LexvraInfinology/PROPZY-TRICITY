@@ -25,19 +25,19 @@ export const PidModal: React.FC = () => {
             <ShieldCheck size={24} />
           </div>
           <h2 className="text-xl font-bold text-white">Search Everything & Property ID</h2>
-          <p className="text-xs text-gray-400 mt-1">Search properties by ID (e.g. PZ-101), title, city, or locality in real time.</p>
+          <p className="text-xs text-gray-400 mt-1">Search properties by PROP-ID (e.g. 101), title, city, or locality in real time.</p>
         </div>
 
         <div className="my-4">
           <GlobalSearchBar
             mode="public"
-            placeholder="Search ID, Title, City, Locality (e.g. PZ-101)..."
+            placeholder="Search PROP-ID, Title, City, Locality (e.g. 101)..."
           />
         </div>
 
         <div className="mt-4 p-3 bg-[#071910] rounded-xl border border-emerald-900/60 text-center">
           <span className="text-[11px] text-emerald-300 font-medium">
-            Try sample searches: <strong className="text-emerald-400 font-mono">PZ-101</strong>, <strong className="text-emerald-400 font-mono">2 BHK</strong>, <strong className="text-emerald-400 font-mono">Mohali</strong>
+            Try sample searches: <strong className="text-emerald-400 font-mono">101</strong>, <strong className="text-emerald-400 font-mono">2 BHK</strong>, <strong className="text-emerald-400 font-mono">Mohali</strong>
           </span>
         </div>
       </div>

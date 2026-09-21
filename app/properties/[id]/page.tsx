@@ -9,6 +9,7 @@ import {
   Clock, CheckCircle2, XCircle
 } from 'lucide-react';
 import { PropertyItem } from '@/lib/seedData';
+import { formatPrice } from '@/lib/format';
 import { useApp } from '@/context/AppContext';
 import { InquiryModal } from '@/components/InquiryModal';
 import { LazyImage } from '@/components/LazyImage';
@@ -37,6 +38,18 @@ export default function PropertyDetailPage() {
   const [totalSimilarCount, setTotalSimilarCount] = useState(0);
   const [verifying, setVerifying] = useState(false);
   const similarSliderRef = useRef<HTMLDivElement>(null);
+  const thumbnailRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  useEffect(() => {
+    if (isLightboxOpen && thumbnailRefs.current[currentImgIndex]) {
+      thumbnailRefs.current[currentImgIndex]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest',
+        inline: 'center',
+      });
+    }
+  }, [currentImgIndex, isLightboxOpen]);
+
 
   const scrollSimilarSlider = (direction: 'left' | 'right') => {
     if (similarSliderRef.current) {
@@ -286,34 +299,6 @@ export default function PropertyDetailPage() {
     }
   };
 
-  const formatPrice = (val: number | string | any) => {
-    if (val === undefined || val === null || val === '') return '₹0';
-    if (typeof val === 'string') {
-      const trimmed = val.trim();
-      if (trimmed.includes('-')) {
-        const parts = trimmed.split('-').map(p => p.trim().replace(/[^0-9.]/g, ''));
-        if (parts.length === 2 && parts[0] && parts[1]) {
-          const p1 = Number(parts[0]);
-          const p2 = Number(parts[1]);
-          if (!isNaN(p1) && !isNaN(p2)) {
-            return `₹${p1.toLocaleString('en-IN')} - ₹${p2.toLocaleString('en-IN')}`;
-          }
-        }
-        return trimmed.startsWith('₹') ? trimmed : `₹${trimmed}`;
-      }
-      const num = Number(trimmed.replace(/,/g, ''));
-      if (!isNaN(num) && num > 0) {
-        val = num;
-      } else {
-        return trimmed.startsWith('₹') ? trimmed : `₹${trimmed}`;
-      }
-    }
-    const numVal = Number(val);
-    if (numVal >= 10000000) return `₹${(numVal / 10000000).toFixed(2)} Cr`;
-    if (numVal >= 100000) return `₹${(numVal / 100000).toFixed(2)} Lakh`;
-    return `₹${numVal.toLocaleString('en-IN')}`;
-  };
-
   const handleShare = () => {
     if (navigator.clipboard) {
       navigator.clipboard.writeText(window.location.href);
@@ -428,7 +413,7 @@ export default function PropertyDetailPage() {
               title="Copy Link"
             >
               <Copy size={14} />
-              <span className="hidden sm:inline text-xs font-semibold">Share</span>
+              <span className="hidden sm:inline text-xs font-semibold">Copy</span>
             </button>
             <button
               onClick={() => toggleWishlist(property.id || property.pid)}
@@ -462,7 +447,7 @@ export default function PropertyDetailPage() {
             <div>
               <div className="flex items-center space-x-2 flex-wrap justify-center sm:justify-start">
                 <p className="text-xs font-extrabold text-emerald-300">
-                  {isAdmin ? `👑 Admin Moderation View (${property.pid})` : `You are managing this listing (${property.pid})`}
+                  {isAdmin ? `Admin Moderation View (PROP-ID: ${property.pid?.replace(/^(PZ|LR)-/i, '')})` : `You are managing this listing (PROP-ID: ${property.pid?.replace(/^(PZ|LR)-/i, '')})`}
                 </p>
                 {property.available === false ? (
                   <span className="px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-400 border border-zinc-700 text-[9px] font-bold">
@@ -529,7 +514,7 @@ export default function PropertyDetailPage() {
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <span className="bg-gray-900 text-white font-mono text-xs font-semibold px-2.5 py-1 rounded-md">
-            ID: {property.pid}
+            PROP-ID: {property.pid?.replace(/^(PZ|LR)-/i, '')}
           </span>
           {property.available === false && (
             <span className="bg-zinc-800 text-zinc-300 text-xs font-semibold px-2.5 py-1 rounded-md">
@@ -741,23 +726,6 @@ export default function PropertyDetailPage() {
             )}
           </div>
 
-          {/* Watch Video Tour Button in Hero */}
-          {rawVideos.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                setCurrentImgIndex(0);
-                const videoElem = document.getElementById('property-video-tour');
-                if (videoElem) {
-                  videoElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-              }}
-              className="absolute bottom-4 left-4 z-20 px-3.5 py-2 rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs flex items-center space-x-1.5 shadow-2xl transition-all cursor-pointer hover:scale-105 active:scale-95"
-            >
-              <Video size={14} className="stroke-[2.5]" />
-              <span>Watch Video Tour</span>
-            </button>
-          )}
 
           {/* View All Media Button */}
           {images.length > 1 && (
@@ -867,42 +835,50 @@ export default function PropertyDetailPage() {
           </div>
 
           {/* Bottom Thumbnail Strip */}
-          <div className="pt-2.5 pb-2 border-t border-gray-900 overflow-x-auto flex items-center justify-center space-x-2.5 max-w-4xl mx-auto w-full shrink-0" onClick={(e) => e.stopPropagation()}>
-            {images.map((item, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => setCurrentImgIndex(idx)}
-                className={`relative w-14 h-11 sm:w-16 sm:h-12 rounded-lg sm:rounded-xl overflow-hidden border-2 shrink-0 transition-all cursor-pointer ${
-                  currentImgIndex === idx ? 'border-emerald-500 scale-105 shadow-md shadow-emerald-500/30' : 'border-transparent opacity-50 hover:opacity-100'
-                }`}
-              >
-                {item.type === 'video' ? (
-                  item.poster ? (
+          <div
+            className="pt-2.5 pb-2 border-t border-gray-900 overflow-x-auto no-scrollbar max-w-4xl mx-auto w-full shrink-0"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-start sm:justify-center gap-2.5 px-3 sm:px-4 w-max min-w-full">
+              {images.map((item, idx) => (
+                <button
+                  key={idx}
+                  ref={(el) => {
+                    thumbnailRefs.current[idx] = el;
+                  }}
+                  type="button"
+                  onClick={() => setCurrentImgIndex(idx)}
+                  className={`relative w-14 h-11 sm:w-16 sm:h-12 rounded-lg sm:rounded-xl overflow-hidden border-2 shrink-0 transition-all cursor-pointer ${
+                    currentImgIndex === idx ? 'border-emerald-500 scale-105 shadow-md shadow-emerald-500/30' : 'border-transparent opacity-50 hover:opacity-100'
+                  }`}
+                >
+                  {item.type === 'video' ? (
+                    item.poster ? (
+                      <LazyImage
+                        src={item.poster}
+                        alt={`Thumbnail ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-[#091710] flex items-center justify-center">
+                        <Video size={16} className="text-emerald-400" />
+                      </div>
+                    )
+                  ) : (
                     <LazyImage
-                      src={item.poster}
+                      src={item.url}
                       alt={`Thumbnail ${idx + 1}`}
                       className="w-full h-full object-cover"
                     />
-                  ) : (
-                    <div className="w-full h-full bg-[#091710] flex items-center justify-center">
-                      <Video size={16} className="text-emerald-400" />
+                  )}
+                  {item.type === 'video' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
+                      <Play size={12} className="text-emerald-400 fill-current" />
                     </div>
-                  )
-                ) : (
-                  <LazyImage
-                    src={item.url}
-                    alt={`Thumbnail ${idx + 1}`}
-                    className="w-full h-full object-cover"
-                  />
-                )}
-                {item.type === 'video' && (
-                  <div className="absolute inset-0 flex items-center justify-center bg-black/40 pointer-events-none">
-                    <Play size={12} className="text-emerald-400 fill-current" />
-                  </div>
-                )}
-              </button>
-            ))}
+                  )}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -912,120 +888,95 @@ export default function PropertyDetailPage() {
         {/* Left Specification Column */}
         <div className="lg:col-span-2 space-y-8">
           {/* Key Overview Cards */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 p-6 bg-[#0a110d] rounded-3xl border border-emerald-950/90 shadow-xl">
-            <div className="space-y-1">
-              <span className="text-xs text-gray-400 block">
-                {property.category === 'commercial' ? 'Commercial Rate' : 'Rent / Price'}
-              </span>
-              <span className="text-xl font-extrabold text-white block">{formatPrice(property.price)}</span>
-              {property.deposit ? (
-                <span className="text-[11px] text-gray-400 block mt-0.5">
-                  Deposit: {formatPrice(property.deposit)}
-                </span>
-              ) : null}
-            </div>
+          {(() => {
+            const hasArea = Boolean(property.areaSqFt && property.areaSqFt > 0);
+            const priceDisplay = formatPrice(property.price);
+            const isLongPrice = priceDisplay.length > 12;
 
-            {property.category === 'commercial' || property.type === 'commercial' ? (
-              <div className="space-y-1">
-                <span className="text-xs text-gray-400 block">Property Type</span>
-                <span className="text-base font-bold text-white flex items-center space-x-1">
-                  <Building2 size={18} className="text-emerald-500" />
-                  <span className="capitalize">Commercial</span>
-                </span>
-              </div>
-            ) : (
-              property.bedrooms !== undefined && property.bedrooms > 0 && (
-                <div className="space-y-1">
-                  <span className="text-xs text-gray-400 block">Bedrooms</span>
-                  <span className="text-base font-bold text-white flex items-center space-x-1">
-                    <Bed size={18} className="text-emerald-500" />
-                    <span>{property.bedrooms === 0.5 ? '1 RK' : `${property.bedrooms} BHK`}</span>
+            return (
+              <div className={`grid grid-cols-2 ${hasArea ? 'sm:grid-cols-4' : 'sm:grid-cols-3'} gap-4 sm:gap-6 p-5 sm:p-6 bg-[#0a110d] rounded-3xl border border-emerald-950/90 shadow-xl items-start`}>
+                <div className={`space-y-1 min-w-0 ${isLongPrice ? 'col-span-2 sm:col-span-1' : 'col-span-1'}`}>
+                  <span className="text-xs text-gray-400 block truncate">
+                    {property.category === 'commercial' ? 'Commercial Rate' : 'Rent / Price'}
                   </span>
-                </div>
-              )
-            )}
-
-            {property.bathrooms !== undefined && (
-              <div className="space-y-1">
-                <span className="text-xs text-gray-400 block">
-                  {property.category === 'commercial' || property.type === 'commercial' ? 'Washrooms' : 'Bathrooms'}
-                </span>
-                <span className="text-base font-bold text-white flex items-center space-x-1">
-                  <Bath size={18} className="text-emerald-500" />
-                  <span>
-                    {property.bathrooms === 0 ? 'Shared / Common' : `${property.bathrooms} ${(property.category === 'commercial' || property.type === 'commercial') ? (property.bathrooms === 1 ? 'Washroom' : 'Washrooms') : (property.bathrooms === 1 ? 'Bath' : 'Baths')}`}
-                  </span>
-                </span>
-              </div>
-            )}
-
-            {Boolean(property.areaSqFt && property.areaSqFt > 0) && (
-              <div className="space-y-1">
-                <span className="text-xs text-gray-400 block">Super Area</span>
-                <span className="text-base font-bold text-white flex items-center space-x-1">
-                  <Maximize size={18} className="text-emerald-500" />
-                  <span>{property.areaSqFt} sqft</span>
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Walkthrough Video Tour Section */}
-          {rawVideos.length > 0 && (
-            <div id="property-video-tour" className="bg-[#0a110d] p-4 sm:p-6 rounded-3xl border border-emerald-950/90 shadow-xl space-y-4">
-              <div className="flex items-center justify-between border-b border-emerald-950 pb-3">
-                <div className="flex items-center space-x-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-[#0e261a] border border-emerald-800/80 flex items-center justify-center text-emerald-400 shrink-0">
-                    <Video size={16} />
-                  </div>
-                  <div>
-                    <h3 className="text-base sm:text-lg font-bold text-white flex items-center space-x-2">
-                      <span>Video Walkthrough Tour</span>
-                    </h3>
-                    <p className="text-[11px] text-gray-400">Virtual property walkthrough recorded for this listing</p>
-                  </div>
-                </div>
-
-                <span className="px-2.5 py-1 rounded-full bg-emerald-950 border border-emerald-800/80 text-emerald-400 text-[10px] font-bold uppercase tracking-wider hidden sm:inline-flex items-center space-x-1">
-                  <Sparkles size={11} />
-                  <span>Verified Tour</span>
-                </span>
-              </div>
-
-              <div className="relative rounded-2xl overflow-hidden aspect-video bg-black border border-emerald-900/60 shadow-2xl">
-                {(() => {
-                  const videoUrl = rawVideos[0];
-                  const embedUrl = getYouTubeEmbedUrl(videoUrl);
-
-                  if (embedUrl) {
-                    return (
-                      <iframe
-                        src={embedUrl}
-                        title={`${property.title} Video Tour`}
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        allowFullScreen
-                        className="w-full h-full border-0"
-                      />
-                    );
-                  }
-
-                  return (
-                    <video
-                      controls
-                      playsInline
-                      preload="metadata"
-                      poster={getVideoPoster(videoUrl)}
-                      className="w-full h-full object-contain bg-black"
+                  <div className="flex items-baseline gap-1.5 flex-wrap">
+                    <span
+                      className={`${
+                        isLongPrice
+                          ? 'text-base sm:text-lg lg:text-xl'
+                          : 'text-xl sm:text-2xl'
+                      } font-extrabold text-white block whitespace-nowrap tracking-tight`}
+                      title={priceDisplay}
                     >
-                      <source src={videoUrl} type="video/mp4" />
-                      <source src={videoUrl} type="video/webm" />
-                      Your browser does not support video playback.
-                    </video>
-                  );
-                })()}
+                      {priceDisplay}
+                    </span>
+                    {(property.category === 'rent' || property.category === 'pg') && (
+                      <span className="text-xs text-gray-400 font-normal">/mo</span>
+                    )}
+                  </div>
+                  {property.deposit ? (
+                    <span
+                      className="text-[11px] text-gray-400 block mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis"
+                      title={`Deposit: ${formatPrice(property.deposit)}`}
+                    >
+                      Deposit: {formatPrice(property.deposit)}
+                    </span>
+                  ) : null}
+                </div>
+
+                {property.category === 'commercial' || property.type === 'commercial' ? (
+                  <div className="space-y-1 min-w-0">
+                    <span className="text-xs text-gray-400 block truncate">Property Type</span>
+                    <span className="text-base font-bold text-white flex items-center space-x-1 whitespace-nowrap">
+                      <Building2 size={18} className="text-emerald-500 shrink-0" />
+                      <span className="capitalize truncate">Commercial</span>
+                    </span>
+                  </div>
+                ) : (
+                  (property.category === 'pg' || property.type === 'pg' || (property.bedrooms !== undefined && property.bedrooms >= 0)) && (
+                    <div className="space-y-1 min-w-0">
+                      <span className="text-xs text-gray-400 block truncate">Bedrooms / Config</span>
+                      <span className="text-base font-bold text-white flex items-center space-x-1 whitespace-nowrap">
+                        <Bed size={18} className="text-emerald-500 shrink-0" />
+                        <span className="truncate">
+                          {property.category === 'pg' || property.type === 'pg' || property.bedrooms === 0
+                            ? 'PG'
+                            : property.bedrooms === 0.5
+                            ? '1 RK'
+                            : `${property.bedrooms} BHK`}
+                        </span>
+                      </span>
+                    </div>
+                  )
+                )}
+
+                {property.bathrooms !== undefined && (
+                  <div className="space-y-1 min-w-0">
+                    <span className="text-xs text-gray-400 block truncate">
+                      {property.category === 'commercial' || property.type === 'commercial' ? 'Washrooms' : 'Bathrooms'}
+                    </span>
+                    <span className="text-base font-bold text-white flex items-center space-x-1 whitespace-nowrap">
+                      <Bath size={18} className="text-emerald-500 shrink-0" />
+                      <span className="truncate">
+                        {property.bathrooms === 0 ? 'Shared / Common' : `${property.bathrooms} ${(property.category === 'commercial' || property.type === 'commercial') ? (property.bathrooms === 1 ? 'Washroom' : 'Washrooms') : (property.bathrooms === 1 ? 'Bath' : 'Baths')}`}
+                      </span>
+                    </span>
+                  </div>
+                )}
+
+                {hasArea && (
+                  <div className="space-y-1 min-w-0">
+                    <span className="text-xs text-gray-400 block truncate">Super Area</span>
+                    <span className="text-base font-bold text-white flex items-center space-x-1 whitespace-nowrap">
+                      <Maximize size={18} className="text-emerald-500 shrink-0" />
+                      <span className="truncate">{property.areaSqFt} sqft</span>
+                    </span>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
+
 
           {/* Description */}
           <div className="bg-[#0a110d] p-6 rounded-3xl border border-emerald-950/90 shadow-xl space-y-3 flex flex-col">
@@ -1110,7 +1061,7 @@ export default function PropertyDetailPage() {
                       </a>
 
                       <a
-                        href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Hi, I am interested in your property ${property.pid} (${property.title}) on PROPZY.`)}`}
+                        href={`https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Hi, I am interested in your property PROP-ID: ${property.pid?.replace(/^(PZ|LR)-/i, '')} (${property.title}) on PROPZY.`)}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="w-full py-3 bg-[#0d2a1b] hover:bg-[#123824] text-emerald-400 border border-emerald-800/80 rounded-2xl font-bold text-xs transition-all flex items-center justify-center space-x-2 cursor-pointer active:scale-95"
@@ -1233,13 +1184,13 @@ export default function PropertyDetailPage() {
               </h2>
               <p className="text-xs sm:text-sm text-gray-400">
                 {property.category === 'pg' || property.type === 'pg'
-                  ? `PG & 1 BHK properties around ₹${property.price.toLocaleString('en-IN')}${property.locality ? ` in ${property.locality}` : property.city ? ` in ${property.city}` : ''}`
+                  ? `PG & 1 BHK properties around ${formatPrice(property.price)}${property.locality ? ` in ${property.locality}` : property.city ? ` in ${property.city}` : ''}`
                   : property.bedrooms === 1
-                  ? `1 BHK & PG properties around ₹${property.price.toLocaleString('en-IN')}${property.locality ? ` in ${property.locality}` : property.city ? ` in ${property.city}` : ''}`
+                  ? `1 BHK & PG properties around ${formatPrice(property.price)}${property.locality ? ` in ${property.locality}` : property.city ? ` in ${property.city}` : ''}`
                   : property.bedrooms && (property.bedrooms === 3 || property.bedrooms === 4)
-                  ? `3 & 4 BHK properties around ₹${property.price.toLocaleString('en-IN')}${property.locality ? ` in ${property.locality}` : property.city ? ` in ${property.city}` : ''}`
+                  ? `3 & 4 BHK properties around ${formatPrice(property.price)}${property.locality ? ` in ${property.locality}` : property.city ? ` in ${property.city}` : ''}`
                   : property.bedrooms && property.bedrooms > 0
-                  ? `${property.bedrooms} BHK properties around ₹${property.price.toLocaleString('en-IN')}${property.locality ? ` in ${property.locality}` : property.city ? ` in ${property.city}` : ''}`
+                  ? `${property.bedrooms} BHK properties around ${formatPrice(property.price)}${property.locality ? ` in ${property.locality}` : property.city ? ` in ${property.city}` : ''}`
                   : `Similar ${property.category === 'commercial' || property.type === 'commercial' ? 'Commercial' : ''} properties in ${property.city || 'Tricity'}`}
               </p>
             </div>

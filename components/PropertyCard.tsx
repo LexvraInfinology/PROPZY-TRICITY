@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Heart, ShieldCheck, MapPin, Bed, Bath, Maximize, PhoneCall, ChevronLeft, ChevronRight, UserCheck, Building2, Video, Play } from 'lucide-react';
 import { PropertyItem } from '@/lib/seedData';
+import { formatPrice } from '@/lib/format';
 import { useApp } from '@/context/AppContext';
 
 import { LazyImage } from '@/components/LazyImage';
@@ -70,34 +71,6 @@ export const PropertyCard: React.FC<PropertyCardProps> = React.memo(({ property,
     if (images.length > 1) {
       setCurrentImgIndex((prev) => (prev - 1 + images.length) % images.length);
     }
-  };
-
-  const formatPrice = (val: number | string | any) => {
-    if (val === undefined || val === null || val === '') return '₹0';
-    if (typeof val === 'string') {
-      const trimmed = val.trim();
-      if (trimmed.includes('-')) {
-        const parts = trimmed.split('-').map(p => p.trim().replace(/[^0-9.]/g, ''));
-        if (parts.length === 2 && parts[0] && parts[1]) {
-          const p1 = Number(parts[0]);
-          const p2 = Number(parts[1]);
-          if (!isNaN(p1) && !isNaN(p2)) {
-            return `₹${p1.toLocaleString('en-IN')} - ₹${p2.toLocaleString('en-IN')}`;
-          }
-        }
-        return trimmed.startsWith('₹') ? trimmed : `₹${trimmed}`;
-      }
-      const num = Number(trimmed.replace(/,/g, ''));
-      if (!isNaN(num) && num > 0) {
-        val = num;
-      } else {
-        return trimmed.startsWith('₹') ? trimmed : `₹${trimmed}`;
-      }
-    }
-    const numVal = Number(val);
-    if (numVal >= 10000000) return `₹${(numVal / 10000000).toFixed(2)} Cr`;
-    if (numVal >= 100000) return `₹${(numVal / 100000).toFixed(2)} Lakh`;
-    return `₹${numVal.toLocaleString('en-IN')}`;
   };
 
   const propertyUrl = `/properties/${property.pid || property.id}`;
@@ -180,7 +153,7 @@ export const PropertyCard: React.FC<PropertyCardProps> = React.memo(({ property,
 
         {/* PID Badge */}
         <div className="absolute bottom-3 left-3 bg-black/75 backdrop-blur-md text-emerald-400 text-[10px] font-mono font-bold px-2.5 py-1 rounded-full border border-emerald-900/60 z-10">
-          {property.pid}
+          PROP-ID: {property.pid?.replace(/^(PZ|LR)-/i, '')}
         </div>
 
         {/* Wishlist Button */}
@@ -237,10 +210,10 @@ export const PropertyCard: React.FC<PropertyCardProps> = React.memo(({ property,
               {property.title}
             </h3>
             <div className="text-right shrink-0">
-              <span className="text-sm font-extrabold text-emerald-400">
+              <span className="text-sm font-extrabold text-emerald-400 whitespace-nowrap">
                 {formatPrice(property.price)}
               </span>
-              {property.category === 'rent' && <span className="text-[11px] font-normal text-gray-400">/month</span>}
+              {property.category === 'rent' && <span className="text-[11px] font-normal text-gray-400 block whitespace-nowrap -mt-0.5">/month</span>}
             </div>
           </div>
 
@@ -252,10 +225,16 @@ export const PropertyCard: React.FC<PropertyCardProps> = React.memo(({ property,
                 <span>Commercial</span>
               </div>
             ) : (
-              property.bedrooms !== undefined && property.bedrooms > 0 && (
+              (property.category === 'pg' || property.type === 'pg' || (property.bedrooms !== undefined && property.bedrooms >= 0)) && (
                 <div className="flex items-center space-x-1.5">
                   <Bed size={14} className="text-emerald-500" />
-                  <span>{property.bedrooms === 0.5 ? '1 RK' : `${property.bedrooms} Bed`}</span>
+                  <span>
+                    {property.category === 'pg' || property.type === 'pg' || property.bedrooms === 0
+                      ? 'PG'
+                      : property.bedrooms === 0.5
+                      ? '1 RK'
+                      : `${property.bedrooms} Bed`}
+                  </span>
                 </div>
               )
             )}

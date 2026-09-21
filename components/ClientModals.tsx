@@ -2,6 +2,8 @@
 
 import dynamic from 'next/dynamic';
 
+import { Suspense } from 'react';
+
 const AuthModal = dynamic(() => import('@/components/AuthModal').then(m => ({ default: m.AuthModal })), {
   ssr: false,
 });
@@ -11,9 +13,9 @@ const PidModal = dynamic(() => import('@/components/PidModal').then(m => ({ defa
 
 export function ClientModals() {
   return (
-    <>
+    <Suspense fallback={null}>
       <AuthModal />
       <PidModal />
-    </>
+    </Suspense>
   );
 }

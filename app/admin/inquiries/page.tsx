@@ -280,7 +280,7 @@ export default function AdminInquiriesPage() {
                   <div className="flex items-center justify-between gap-1.5 pb-2 border-b border-emerald-950/70">
                     <div className="flex items-center space-x-1.5">
                       <span className="px-2 py-0.5 rounded-md bg-emerald-950/90 border border-emerald-800/80 font-mono font-bold text-[11px] text-emerald-400">
-                        {item.propertyPid || 'PZ-101'}
+                        PROP-ID: {item.propertyPid ? item.propertyPid.replace(/^(PZ|LR)-/i, '') : '101'}
                       </span>
                     </div>
 
@@ -333,7 +333,7 @@ export default function AdminInquiriesPage() {
           <table className="w-full min-w-[700px] text-left text-xs text-gray-300">
             <thead className="bg-[#050806] text-gray-400 font-extrabold uppercase tracking-wider text-[10px] border-b border-emerald-950">
               <tr>
-                <th className="p-3.5 whitespace-nowrap">Property ID</th>
+                <th className="p-3.5 whitespace-nowrap">PROP-ID</th>
                 <th className="p-3.5 whitespace-nowrap">Tenant Details</th>
                 <th className="p-3.5">Message / Request</th>
                 <th className="p-3.5 whitespace-nowrap">Lead Status</th>
@@ -355,7 +355,7 @@ export default function AdminInquiriesPage() {
                   const currentStatus = item.status || 'New';
                   return (
                     <tr key={id} className="hover:bg-[#07120a] transition-colors">
-                      <td className="p-3.5 font-mono font-bold text-emerald-400 whitespace-nowrap">{item.propertyPid || 'PZ-101'}</td>
+                      <td className="p-3.5 font-mono font-bold text-emerald-400 whitespace-nowrap">{item.propertyPid ? item.propertyPid.replace(/^(PZ|LR)-/i, '') : '101'}</td>
                       <td className="p-3.5 whitespace-nowrap">
                         <div className="font-bold text-white">{item.tenantName}</div>
                         <div className="text-[10px] font-mono text-gray-400">{item.tenantPhone}</div>

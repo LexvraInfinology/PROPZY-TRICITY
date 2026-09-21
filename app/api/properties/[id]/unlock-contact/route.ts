@@ -52,11 +52,12 @@ export async function POST(
     await connectToDatabase();
 
     // 1. Find Property
+    const cleanId = id.replace(/^(PZ|LR|prop)-/i, '');
     const normalizedPz = id.startsWith('prop-') ? `PZ-${id.replace('prop-', '')}` : id.startsWith('LR-') ? `PZ-${id.replace('LR-', '')}` : id;
     const normalizedLr = id.startsWith('prop-') ? `LR-${id.replace('prop-', '')}` : id.startsWith('PZ-') ? `LR-${id.replace('PZ-', '')}` : id;
 
     let property = await Property.findOne({
-      $or: [{ pid: id }, { pid: normalizedPz }, { pid: normalizedLr }, { id: id }]
+      $or: [{ pid: cleanId }, { pid: id }, { pid: normalizedPz }, { pid: normalizedLr }, { id: cleanId }, { id: id }]
     });
 
     if (!property && id.match(/^[0-9a-fA-F]{24}$/)) {

@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
 
     // 1. Strict configured Admin credentials check
     let isAdminMatch = false;
-    if (cleanInput === adminEmail) {
+    if (cleanInput === adminEmail || cleanInput === 'admin' || (adminEmail.includes('@') && cleanInput === adminEmail.split('@')[0])) {
       if (adminPassword.startsWith('$2a$') || adminPassword.startsWith('$2b$')) {
         isAdminMatch = await bcrypt.compare(password, adminPassword);
       } else {

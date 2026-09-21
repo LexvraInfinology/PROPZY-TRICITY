@@ -6,7 +6,7 @@ import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Heart, User, Building, PhoneCall, ShieldCheck, CheckCircle2,
   XCircle, RefreshCw, CreditCard, Sparkles, FileText, Download, Check, Edit3, Save, AlertTriangle, Upload,
-  Phone, Mail, X, Home, MapPin, Printer, Zap, Calendar
+  Phone, Mail, X, Home, MapPin, Printer, Zap, Calendar, LogOut, ArrowRight
 } from 'lucide-react';
 
 import { useApp, UserProfile, BillingRecord } from '@/context/AppContext';
@@ -16,6 +16,8 @@ import { LazyImage } from '@/components/LazyImage';
 import { BrandSpinner } from '@/components/Loader';
 import { sanitizeName, sanitizePhone, isValidName, isValidPhone, isValidEmail, isValidElectricityBillDocument, isValidHttpUrl } from '@/lib/validation';
 import { initiateRazorpaySubscription } from '@/lib/razorpayClient';
+import { formatPrice } from '@/lib/format';
+import { InvoiceModal } from '@/components/InvoiceModal';
 
 
 interface InquiryItem {
@@ -44,6 +46,7 @@ function DashboardContent() {
   const [allProperties, setAllProperties] = useState<PropertyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingPlan, setProcessingPlan] = useState<string | null>(null);
+  const [selectedInvoice, setSelectedInvoice] = useState<BillingRecord | null>(null);
 
   const handleSubscribeToPlan = async (planName: string, amount: number) => {
     if (!user) {
@@ -258,7 +261,7 @@ function DashboardContent() {
         if (!active || !data.success || !data.user) return;
         setUser(data.user);
       })
-      .catch(() => {});
+      .catch(() => { });
 
     return () => {
       active = false;
@@ -320,7 +323,7 @@ function DashboardContent() {
               }
             }
           })
-          .catch(() => {});
+          .catch(() => { });
       }
 
       // Fetch all properties (including owner's unverified listings awaiting moderation)
@@ -474,7 +477,7 @@ function DashboardContent() {
   const handleVerifySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || submittingVerify || user.verificationStatus === 'pending' || user.verificationStatus === 'approved') return;
-    
+
     const cleanCA = verifyForm.consumerNumber.replace(/[^a-zA-Z0-9]/g, '').trim();
     if (!cleanCA || cleanCA.length < 3) {
       showToast('Please enter a valid Electricity Bill Consumer / CA Number (min 3 digits)');
@@ -593,97 +596,103 @@ function DashboardContent() {
   const roleDisplayName = isPawanPropzy
     ? 'Sales Executive'
     : user?.role === 'owner'
-    ? 'Property Owner'
-    : user?.role === 'admin'
-    ? 'Admin'
-    : 'Tenant Account';
+      ? 'Property Owner'
+      : user?.role === 'admin'
+        ? 'Admin'
+        : 'Tenant Account';
 
   const roleBadgeName = isPawanPropzy
     ? 'Sales Executive'
     : user?.role === 'owner'
-    ? 'Owner'
-    : user?.role === 'admin'
-    ? 'Admin'
-    : 'Tenant';
+      ? 'Owner'
+      : user?.role === 'admin'
+        ? 'Admin'
+        : 'Tenant';
 
   return (
-    <div className="bg-[#050806] text-gray-100 min-h-screen">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+    <div className="bg-[#050806] text-gray-100 w-full">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-6 sm:space-y-8">
         {/* User Profile Header Card */}
-        <div className="bg-[#0a110d] rounded-3xl border border-emerald-950/90 p-6 sm:p-8 shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
-          <div className="flex items-center space-x-5">
-            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-emerald-500 text-black font-extrabold text-2xl sm:text-3xl flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0">
+        <div className="bg-[#0a110d] rounded-2xl sm:rounded-3xl border border-emerald-950/90 p-4 sm:p-7 shadow-xl flex flex-col lg:flex-row items-start lg:items-center justify-between gap-5 sm:gap-6">
+          <div className="flex items-center space-x-3.5 sm:space-x-5 w-full sm:w-auto">
+            <div className="w-14 h-14 sm:w-20 sm:h-20 rounded-full bg-emerald-500 text-black font-extrabold text-xl sm:text-3xl flex items-center justify-center shadow-lg shadow-emerald-500/20 shrink-0">
               {user.name.charAt(0)}
             </div>
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 min-w-0 flex-1">
               <div className="flex items-center space-x-2 flex-wrap gap-y-1.5">
-                <h2 className="text-xl sm:text-2xl font-extrabold text-white">{user.name}</h2>
-                <span className={`text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full ${
-                  isPawanPropzy
-                    ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-black font-extrabold shadow-md'
-                    : 'bg-[#092618] text-emerald-400 border border-emerald-800/80'
-                }`}>
+                <h2 className="text-lg sm:text-2xl font-extrabold text-white truncate max-w-[200px] sm:max-w-none">{user.name}</h2>
+                <span className={`text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full ${isPawanPropzy
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-black font-extrabold shadow-md'
+                  : 'bg-[#092618] text-emerald-400 border border-emerald-800/80'
+                  }`}>
                   {roleBadgeName}
                 </span>
 
                 {user.role !== 'owner' && (
-                  <span className="inline-flex items-center space-x-1.5 text-[10px] font-extrabold px-3 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border border-amber-500/50 text-amber-300 shadow-sm">
-                    <Sparkles size={11} className="text-amber-400" />
+                  <span className="inline-flex items-center space-x-1.5 text-[10px] font-extrabold px-2.5 sm:px-3 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border border-amber-500/50 text-amber-300 shadow-sm">
+                    <Sparkles size={11} className="text-amber-400 shrink-0" />
                     <span>{user.activePlan || 'Standard Plan'}</span>
                   </span>
                 )}
 
                 {user.role !== 'owner' && (
-                  <span className="inline-flex items-center space-x-1.5 text-[10px] font-extrabold px-3 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-700/60 text-emerald-300 shadow-sm">
-                    <Zap size={11} className="text-emerald-400 fill-emerald-400" />
+                  <span className="inline-flex items-center space-x-1.5 text-[10px] font-extrabold px-2.5 sm:px-3 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-700/60 text-emerald-300 shadow-sm">
+                    <Zap size={11} className="text-emerald-400 fill-emerald-400 shrink-0" />
                     <span>{user.credits ?? 0} Credits</span>
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-400 font-mono">{user.phone} {user.email ? `• ${user.email}` : ''}</p>
+              <div className="text-xs text-gray-400 font-mono flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                <span>{user.phone}</span>
+                {user.email && <span className="text-gray-600 hidden xs:inline">•</span>}
+                {user.email && <span className="truncate max-w-[220px] sm:max-w-none text-gray-400">{user.email}</span>}
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center space-x-3 w-full lg:w-auto">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto">
             {user.role !== 'owner' && (
               <button
                 type="button"
                 onClick={() => handleTabChange('explore-plans')}
-                className="w-full sm:w-auto px-5 py-2.5 bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-black rounded-full text-xs font-black transition-all flex items-center justify-center space-x-1.5 shadow-lg shadow-amber-500/20 cursor-pointer active:scale-95"
+                className="w-full sm:w-auto px-5 py-3 sm:py-2.5 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 hover:from-amber-400 hover:to-yellow-300 text-black rounded-xl sm:rounded-full text-xs font-black transition-all flex items-center justify-center space-x-2 shadow-lg shadow-amber-500/20 cursor-pointer active:scale-95 whitespace-nowrap"
               >
                 <Sparkles size={14} className="stroke-[2.5]" />
                 <span>Get Credits / Upgrade</span>
               </button>
             )}
 
-            <button
-              onClick={handleManualRefresh}
-              disabled={refreshing}
-              className="w-full sm:w-auto px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black rounded-full text-xs font-bold transition-all flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
-            >
-              <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
-              <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
-            </button>
+            <div className="grid grid-cols-2 gap-2.5 w-full sm:flex sm:w-auto sm:items-center">
+              <button
+                onClick={handleManualRefresh}
+                disabled={refreshing}
+                className="px-4 py-2.5 bg-emerald-500/15 hover:bg-emerald-500 text-emerald-400 hover:text-black border border-emerald-500/30 hover:border-emerald-500 rounded-xl sm:rounded-full text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer disabled:opacity-50 active:scale-95 whitespace-nowrap"
+              >
+                <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+                <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
+              </button>
 
-            <button
-              onClick={() => {
-                logoutUser();
-                router.replace('/');
-              }}
-              className="w-full sm:w-auto px-5 py-2.5 bg-[#140808] hover:bg-red-950/60 text-red-400 border border-red-900/60 rounded-full text-xs font-bold transition-all cursor-pointer"
-            >
-              Log Out
-            </button>
+              <button
+                onClick={() => {
+                  logoutUser();
+                  router.replace('/');
+                }}
+                className="px-4 py-2.5 bg-red-950/30 hover:bg-red-900/60 text-red-400 border border-red-900/50 rounded-xl sm:rounded-full text-xs font-bold transition-all flex items-center justify-center space-x-1.5 cursor-pointer active:scale-95 whitespace-nowrap"
+              >
+                <LogOut size={13} />
+                <span>Log Out</span>
+              </button>
+            </div>
           </div>
         </div>
 
         {/* Dashboard Navigation Tabs */}
-        <div className="flex items-center cursor-pointer space-x-6 border-b border-emerald-950 overflow-x-auto text-xs font-medium pb-px">
+        <div className="flex items-center cursor-pointer space-x-6 border-b border-emerald-950 overflow-x-auto text-xs font-medium pb-px scrollbar-none">
           <button
             onClick={() => handleTabChange('account')}
             className={`pb-3.5 border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${activeTab === 'account'
-                ? 'border-emerald-400 text-emerald-400 font-bold'
-                : 'border-transparent text-gray-400 hover:text-white'
+              ? 'border-emerald-400 text-emerald-400 font-bold'
+              : 'border-transparent text-gray-400 hover:text-white'
               }`}
           >
             <User size={16} />
@@ -694,8 +703,8 @@ function DashboardContent() {
             <button
               onClick={() => handleTabChange('my-properties')}
               className={`pb-3.5 cursor-pointer border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${activeTab === 'my-properties'
-                  ? 'border-emerald-400 text-emerald-400 font-bold'
-                  : 'border-transparent text-gray-400 hover:text-white'
+                ? 'border-emerald-400 text-emerald-400 font-bold'
+                : 'border-transparent text-gray-400 hover:text-white'
                 }`}
             >
               <Building size={16} />
@@ -706,8 +715,8 @@ function DashboardContent() {
           <button
             onClick={() => handleTabChange('wishlist')}
             className={`pb-3.5 border-b-2 cursor-pointer flex items-center space-x-2 whitespace-nowrap transition-all ${activeTab === 'wishlist'
-                ? 'border-emerald-400 text-emerald-400 font-bold'
-                : 'border-transparent text-gray-400 hover:text-white'
+              ? 'border-emerald-400 text-emerald-400 font-bold'
+              : 'border-transparent text-gray-400 hover:text-white'
               }`}
           >
             <Heart size={16} />
@@ -718,8 +727,8 @@ function DashboardContent() {
             <button
               onClick={() => handleTabChange('billing')}
               className={`pb-3.5 cursor-pointer border-b-2 flex items-center space-x-2 whitespace-nowrap transition-all ${activeTab === 'billing'
-                  ? 'border-emerald-400 text-emerald-400 font-bold'
-                  : 'border-transparent text-gray-400 hover:text-white'
+                ? 'border-emerald-400 text-emerald-400 font-bold'
+                : 'border-transparent text-gray-400 hover:text-white'
                 }`}
             >
               <CreditCard size={16} />
@@ -731,8 +740,8 @@ function DashboardContent() {
             <button
               onClick={() => handleTabChange('explore-plans')}
               className={`pb-3.5 border-b-2 cursor-pointer flex items-center space-x-2 whitespace-nowrap transition-all ${activeTab === 'explore-plans'
-                  ? 'border-emerald-400 text-emerald-400 font-bold'
-                  : 'border-transparent text-gray-400 hover:text-white'
+                ? 'border-emerald-400 text-emerald-400 font-bold'
+                : 'border-transparent text-gray-400 hover:text-white'
                 }`}
             >
               <Sparkles size={16} />
@@ -744,8 +753,8 @@ function DashboardContent() {
             <button
               onClick={() => handleTabChange('inquiries')}
               className={`pb-3.5 border-b-2 cursor-pointer flex items-center space-x-2 whitespace-nowrap transition-all ${activeTab === 'inquiries'
-                  ? 'border-emerald-400 text-emerald-400 font-bold'
-                  : 'border-transparent text-gray-400 hover:text-white'
+                ? 'border-emerald-400 text-emerald-400 font-bold'
+                : 'border-transparent text-gray-400 hover:text-white'
                 }`}
             >
               <PhoneCall size={16} />
@@ -787,7 +796,7 @@ function DashboardContent() {
                 {/* Physical ID Card Container */}
                 <div className="flex justify-center py-2">
                   <div className="w-full max-w-[340px] sm:max-w-[360px] rounded-3xl overflow-hidden border-2 border-emerald-500/70 shadow-[0_0_50px_rgba(16,185,129,0.25)] bg-gradient-to-b from-[#0c2417] via-[#07150e] to-[#040805] text-white p-5 sm:p-6 space-y-4 relative">
-                    
+
                     {/* Top Lanyard Slot Cutout */}
                     <div className="w-14 h-2.5 bg-[#030604] rounded-full border border-emerald-900/80 mx-auto shadow-inner" />
 
@@ -880,11 +889,10 @@ function DashboardContent() {
                   <div>
                     <div className="flex items-center space-x-2">
                       <h3 className="text-lg font-extrabold text-white tracking-tight">{user.name}</h3>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
-                        isPawanPropzy
-                          ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-black font-extrabold shadow-md'
-                          : 'bg-emerald-950/80 border border-emerald-800/80 text-emerald-400'
-                      }`}>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${isPawanPropzy
+                        ? 'bg-gradient-to-r from-emerald-500 to-teal-400 text-black font-extrabold shadow-md'
+                        : 'bg-emerald-950/80 border border-emerald-800/80 text-emerald-400'
+                        }`}>
                         {roleBadgeName}
                       </span>
                     </div>
@@ -913,423 +921,511 @@ function DashboardContent() {
                 )}
               </div>
 
-            {!isEditingAccount ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
-                <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
-                  <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
-                    <User size={15} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Full Name</span>
-                    <span className="text-sm font-bold text-white truncate block">{user.name}</span>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
-                  <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
-                    <Phone size={15} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Phone Number</span>
-                    <span className="text-sm font-mono font-bold text-white truncate block">{user.phone}</span>
-                  </div>
-                </div>
-
-                <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
-                  <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
-                    <Mail size={15} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Email Address</span>
-                    <span className="text-sm font-bold text-white truncate block">{user.email || 'Not provided'}</span>
-                  </div>
-                </div>
-
-                {user.role === 'owner' ? (
-                  <>
-                    {/* Card 4: City / Location */}
-                    <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
-                      <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
-                        <MapPin size={15} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-gray-500 font-medium block text-[11px] mb-0.5">City / Location</span>
-                        <span className="text-sm font-bold text-white truncate block">{user.city || 'Mohali'}</span>
-                      </div>
+              {!isEditingAccount ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+                  <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
+                    <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
+                      <User size={15} />
                     </div>
-
-                    {/* Card 5: Account Role */}
-                    <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
-                      <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
-                        <Building size={15} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Account Role</span>
-                        <span className="text-sm font-bold text-emerald-400 truncate block">
-                          {roleDisplayName}
-                        </span>
-                      </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Full Name</span>
+                      <span className="text-sm font-bold text-white truncate block">{user.name}</span>
                     </div>
+                  </div>
 
-                    {/* Card 6: Listed Properties */}
-                    <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
-                      <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
-                        <Home size={15} />
+                  <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
+                    <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
+                      <Phone size={15} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Phone Number</span>
+                      <span className="text-sm font-mono font-bold text-white truncate block">{user.phone}</span>
+                    </div>
+                  </div>
+
+                  <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
+                    <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
+                      <Mail size={15} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Email Address</span>
+                      <span className="text-sm font-bold text-white truncate block">{user.email || 'Not provided'}</span>
+                    </div>
+                  </div>
+
+                  {user.role === 'owner' ? (
+                    <>
+                      {/* Card 4: City / Location */}
+                      <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
+                        <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
+                          <MapPin size={15} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-gray-500 font-medium block text-[11px] mb-0.5">City / Location</span>
+                          <span className="text-sm font-bold text-white truncate block">{user.city || 'Mohali'}</span>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-gray-500 font-medium block text-[11px] mb-0.5">My Listed Properties</span>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-mono font-bold text-emerald-400">
-                            {myProperties.length} {myProperties.length === 1 ? 'Property' : 'Properties'}
+
+                      {/* Card 5: Account Role */}
+                      <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
+                        <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
+                          <Building size={15} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Account Role</span>
+                          <span className="text-sm font-bold text-emerald-400 truncate block">
+                            {roleDisplayName}
                           </span>
-                          {myProperties.length > 0 ? (
+                        </div>
+                      </div>
+
+                      {/* Card 6: Listed Properties */}
+                      <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
+                        <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
+                          <Home size={15} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-gray-500 font-medium block text-[11px] mb-0.5">My Listed Properties</span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-mono font-bold text-emerald-400">
+                              {myProperties.length} {myProperties.length === 1 ? 'Property' : 'Properties'}
+                            </span>
+                            {myProperties.length > 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => handleTabChange('my-properties')}
+                                className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 underline cursor-pointer"
+                              >
+                                View All
+                              </button>
+                            ) : (
+                              <Link
+                                href="/post-property"
+                                className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 underline cursor-pointer"
+                              >
+                                + Post Property
+                              </Link>
+                            )}
+                          </div>
+                          <span className="text-[11px] text-gray-400 block mt-0.5">
+                            Properties posted under your account
+                          </span>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Card 4: Account Role */}
+                      <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
+                        <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
+                          <Building size={15} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Account Role</span>
+                          <span className="text-sm font-bold text-emerald-400 truncate block">
+                            {roleDisplayName}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Card 5: Subscription Plan */}
+                      <div className="p-4 bg-[#050806] rounded-2xl border border-amber-950/60 flex items-start space-x-3 group hover:border-amber-900/80 transition-colors">
+                        <div className="w-8 h-8 rounded-xl bg-[#1f1709] text-amber-400 border border-amber-800/50 flex items-center justify-center shrink-0">
+                          <Sparkles size={15} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Active Subscription</span>
+                          <span className="text-sm font-bold text-amber-300 truncate block">
+                            {user.activePlan || 'Standard Plan'}
+                          </span>
+                          <span className="text-[11px] text-gray-400 block mt-0.5">
+                            {user.planExpiresAt ? (
+                              new Date(user.planExpiresAt) > new Date()
+                                ? `Valid till ${new Date(user.planExpiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`
+                                : 'Plan Expired'
+                            ) : (
+                              'Active Plan'
+                            )}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Card 6: Contact Credits */}
+                      <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
+                        <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
+                          <Zap size={15} className="fill-emerald-400/30" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Contact Credits</span>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-mono font-bold text-emerald-400">
+                              {user.credits ?? 0} Credits
+                            </span>
                             <button
                               type="button"
-                              onClick={() => handleTabChange('my-properties')}
-                              className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 underline cursor-pointer"
+                              onClick={() => handleTabChange('explore-plans')}
+                              className="text-[10px] font-bold text-amber-400 hover:text-amber-300 underline cursor-pointer"
                             >
-                              View All
+                              + Recharge
                             </button>
-                          ) : (
-                            <Link
-                              href="/post-property"
-                              className="text-[10px] font-bold text-emerald-400 hover:text-emerald-300 underline cursor-pointer"
-                            >
-                              + Post Property
-                            </Link>
-                          )}
-                        </div>
-                        <span className="text-[11px] text-gray-400 block mt-0.5">
-                          Properties posted under your account
-                        </span>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* Card 4: Account Role */}
-                    <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
-                      <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
-                        <Building size={15} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Account Role</span>
-                        <span className="text-sm font-bold text-emerald-400 truncate block">
-                          {roleDisplayName}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Card 5: Subscription Plan */}
-                    <div className="p-4 bg-[#050806] rounded-2xl border border-amber-950/60 flex items-start space-x-3 group hover:border-amber-900/80 transition-colors">
-                      <div className="w-8 h-8 rounded-xl bg-[#1f1709] text-amber-400 border border-amber-800/50 flex items-center justify-center shrink-0">
-                        <Sparkles size={15} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Active Subscription</span>
-                        <span className="text-sm font-bold text-amber-300 truncate block">
-                          {user.activePlan || 'Standard Plan'}
-                        </span>
-                        <span className="text-[11px] text-gray-400 block mt-0.5">
-                          {user.planExpiresAt ? (
-                            new Date(user.planExpiresAt) > new Date()
-                              ? `Valid till ${new Date(user.planExpiresAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}`
-                              : 'Plan Expired'
-                          ) : (
-                            'Active Plan'
-                          )}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Card 6: Contact Credits */}
-                    <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 flex items-start space-x-3 group hover:border-emerald-900 transition-colors">
-                      <div className="w-8 h-8 rounded-xl bg-[#091f14] text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
-                        <Zap size={15} className="fill-emerald-400/30" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <span className="text-gray-500 font-medium block text-[11px] mb-0.5">Contact Credits</span>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm font-mono font-bold text-emerald-400">
-                            {user.credits ?? 0} Credits
+                          </div>
+                          <span className="text-[11px] text-gray-400 block mt-0.5">
+                            Used to unlock verified owner contacts
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => handleTabChange('explore-plans')}
-                            className="text-[10px] font-bold text-amber-400 hover:text-amber-300 underline cursor-pointer"
-                          >
-                            + Recharge
-                          </button>
                         </div>
-                        <span className="text-[11px] text-gray-400 block mt-0.5">
-                          Used to unlock verified owner contacts
-                        </span>
                       </div>
-                    </div>
-                  </>
-                )}
-              </div>
-            ) : (
-              <form onSubmit={handleAccountFormSave} className="space-y-5 max-w-2xl mx-auto text-xs py-2">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <label className="block text-gray-300 font-semibold">Full Name</label>
-                    <input
-                      type="text"
-                      required
-                      maxLength={50}
-                      value={accountForm.name}
-                      onChange={(e) => setAccountForm({ ...accountForm, name: sanitizeName(e.target.value) })}
-                      className="w-full px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white text-xs focus:border-emerald-500 focus:outline-none transition-colors"
-                      placeholder="Your full name"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-gray-300 font-semibold">Phone Number (10 Digits)</label>
-                    <input
-                      type="tel"
-                      required
-                      maxLength={10}
-                      value={accountForm.phone}
-                      onChange={(e) => setAccountForm({ ...accountForm, phone: sanitizePhone(e.target.value) })}
-                      className="w-full px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white font-mono text-xs focus:border-emerald-500 focus:outline-none transition-colors"
-                      placeholder="10-digit mobile number"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-gray-300 font-semibold">Email Address</label>
-                    <input
-                      type="email"
-                      value={accountForm.email}
-                      onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })}
-                      className="w-full px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white text-xs focus:border-emerald-500 focus:outline-none transition-colors"
-                      placeholder="name@example.com"
-                    />
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <label className="block text-gray-300 font-semibold">City</label>
-                    <input
-                      type="text"
-                      value={accountForm.city}
-                      onChange={(e) => setAccountForm({ ...accountForm, city: e.target.value })}
-                      className="w-full px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white text-xs focus:border-emerald-500 focus:outline-none transition-colors"
-                      placeholder="e.g. Mohali, Chandigarh, Zirakpur"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-gray-300 font-semibold">Account Type / Role</label>
-                  <div className="w-full px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white font-bold capitalize flex items-center justify-between">
-                    <span className="text-emerald-400 font-extrabold">{roleDisplayName}</span>
-                    <span className="text-[10px] bg-emerald-950 border border-emerald-800 text-emerald-300 px-2.5 py-0.5 rounded-full font-mono uppercase">
-                      {roleBadgeName}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-center space-x-3 pt-3 border-t border-emerald-950/60">
-                  <button
-                    type="submit"
-                    className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs rounded-full shadow-lg shadow-emerald-500/20 transition-all uppercase tracking-wider cursor-pointer"
-                  >
-                    Save Changes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setIsEditingAccount(false)}
-                    className="px-5 py-2.5 bg-[#050806] hover:bg-[#09150e] text-gray-400 hover:text-white border border-emerald-950 rounded-full font-bold text-xs transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* ELECTRICITY BILL OWNER VERIFICATION SECTION (Rendered ONLY for Property Owners) */}
-            {user.role === 'owner' && (
-              <div className="border-t border-emerald-950 pt-6 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h4 className="text-base font-bold text-white flex items-center space-x-2">
-                      <span>Electricity Bill Owner Verification</span>
-                    </h4>
-                    <p className="text-xs text-gray-400">
-                      Upload your Electricity Bill & Consumer Number to verify your property ownership. Only verified owners can post property listings.
-                    </p>
-                  </div>
-
-                  {user.ownerVerified || user.verificationStatus === 'approved' ? (
-                    <span className="px-3 py-1 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-xs font-extrabold flex items-center space-x-1">
-                      <ShieldCheck size={14} />
-                      <span>VERIFIED OWNER</span>
-                    </span>
-                  ) : user.verificationStatus === 'pending' ? (
-                    <span className="px-3 py-1 rounded-full bg-amber-950 text-amber-400 border border-amber-800 text-xs font-extrabold flex items-center space-x-1">
-                      <RefreshCw size={14} className="animate-spin" />
-                      <span>PENDING ADMIN REVIEW</span>
-                    </span>
-                  ) : user.verificationStatus === 'rejected' ? (
-                    <span className="px-3 py-1 rounded-full bg-red-950 text-red-400 border border-red-800 text-xs font-extrabold flex items-center space-x-1">
-                      <XCircle size={14} />
-                      <span>VERIFICATION REJECTED</span>
-                    </span>
-                  ) : (
-                    <span className="px-3 py-1 rounded-full bg-gray-900 text-gray-400 border border-gray-800 text-xs font-bold">
-                      NOT VERIFIED
-                    </span>
+                    </>
                   )}
                 </div>
-
-                {/* Status Notice Banner or Verification Form */}
-                {user.ownerVerified || user.verificationStatus === 'approved' ? (
-                  <div className="space-y-3">
-                    <div className="p-4 bg-[#0d2218] border border-emerald-800/80 rounded-2xl text-xs text-emerald-300 font-medium flex items-center space-x-3">
-                      <CheckCircle2 size={20} className="text-emerald-400 shrink-0" />
-                      <div>
-                        <span className="font-bold block text-white text-sm">Account Fully Verified!</span>
-                        Your Electricity Bill and Consumer Number (<span className="font-mono font-bold text-white break-all">{user.consumerNumber || 'Verified'}</span>) have been approved by Admin. You can post unlimited property listings.
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-2xl border border-emerald-900/70 bg-[#07110b] p-3 sm:p-4 text-xs">
-                      <div className="rounded-xl border border-emerald-950 bg-[#050806] p-3">
-                        <span className="block text-gray-500 font-medium">Submitted Consumer / CA Number</span>
-                        <span className="mt-1 block font-mono font-bold text-emerald-400 text-sm break-all">{user.consumerNumber || 'Not available'}</span>
-                      </div>
-                      <div className="rounded-xl border border-emerald-950 bg-[#050806] p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div>
-                          <span className="block text-gray-500 font-medium">Submitted Electricity Bill</span>
-                          <span className="mt-1 block font-bold text-gray-200">
-                            {user.electricityBillUrl ? (user.electricityBillUrl.startsWith('data:') ? 'Uploaded document' : 'Document URL') : 'Not available'}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          disabled={!user.electricityBillUrl}
-                          onClick={() => handleViewVerificationDocument(user.electricityBillUrl)}
-                          className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-800 bg-emerald-950/60 px-3 py-2 text-[11px] font-bold text-emerald-400 transition-colors hover:bg-emerald-900/60 disabled:cursor-not-allowed disabled:opacity-50"
-                        >
-                          <FileText size={14} />
-                          <span>View document</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : user.verificationStatus === 'pending' ? (
-                  <div className="p-4 bg-amber-950/40 border border-amber-800/80 rounded-2xl text-xs text-amber-300 font-medium flex items-center space-x-3">
-                    <RefreshCw size={20} className="text-amber-400 shrink-0 animate-spin" />
-                    <div>
-                      <span className="font-bold block text-white text-sm">Under Review by Admin</span>
-                      Your Electricity Bill (CA/Consumer No: <strong className="font-mono text-amber-400 break-all">{user.consumerNumber}</strong>) is currently being reviewed by our Admin team. You will be able to post properties as soon as it is approved.
-                    </div>
-                  </div>
-                ) : (
-                  <form onSubmit={handleVerifySubmit} className="space-y-4 max-w-xl text-xs pt-2">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="block text-gray-300 font-semibold">Electricity Bill Consumer / CA Number *</label>
-                        <span className="text-[10px] text-gray-500 font-mono">
-                          {verifyForm.consumerNumber.length}/15 digits max
-                        </span>
-                      </div>
+              ) : (
+                <form onSubmit={handleAccountFormSave} className="space-y-5 max-w-2xl mx-auto text-xs py-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="block text-gray-300 font-semibold">Full Name</label>
                       <input
                         type="text"
                         required
-                        maxLength={15}
-                        placeholder="e.g. 1004829103 or CA100982"
-                        value={verifyForm.consumerNumber}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15);
-                          setVerifyForm({ ...verifyForm, consumerNumber: val });
-                        }}
-                        className="w-full px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white font-mono focus:border-emerald-500 focus:outline-none placeholder-gray-600 tracking-wider text-sm"
+                        maxLength={50}
+                        value={accountForm.name}
+                        onChange={(e) => setAccountForm({ ...accountForm, name: sanitizeName(e.target.value) })}
+                        className="w-full px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white text-xs focus:border-emerald-500 focus:outline-none transition-colors"
+                        placeholder="Your full name"
                       />
-                      <p className="text-[10px] text-gray-400 mt-1">
-                        Enter your 3 to 15 digit Consumer Account (CA) number as printed on your electricity bill.
-                      </p>
                     </div>
 
-                    <div>
-                      <label className="block text-gray-300 font-semibold mb-2">Electricity Bill Document *</label>
-                      <div className="grid grid-cols-2 gap-2 rounded-xl border border-emerald-950 bg-[#050806] p-1.5 mb-3">
-                        <button
-                          type="button"
-                          onClick={() => selectBillInputMode('url')}
-                          className={`rounded-lg px-3 py-2 text-xs font-bold transition-colors ${billInputMode === 'url' ? 'bg-emerald-500 text-black' : 'text-gray-400 hover:text-white'}`}
-                        >
-                          Use document URL
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => selectBillInputMode('upload')}
-                          className={`rounded-lg px-3 py-2 text-xs font-bold transition-colors ${billInputMode === 'upload' ? 'bg-emerald-500 text-black' : 'text-gray-400 hover:text-white'}`}
-                        >
-                          Upload file
-                        </button>
-                      </div>
-                      {billInputMode === 'url' && (
-                        <>
+                    <div className="space-y-1.5">
+                      <label className="block text-gray-300 font-semibold">Phone Number (10 Digits)</label>
                       <input
-                        type="url"
+                        type="tel"
                         required
-                        placeholder="Paste image link or URL of your electricity bill document"
-                        value={uploadedBillName ? '' : verifyForm.billUrl}
-                        onChange={(e) => {
-                          const billUrl = e.target.value;
-                          setVerifyForm({ ...verifyForm, billUrl });
-                          setUploadedBillName('');
-                          validateBillUrl(billUrl);
-                        }}
-                        onBlur={(e) => validateBillUrl(e.target.value)}
-                        aria-invalid={Boolean(billUrlError)}
-                        className={`w-full px-4 py-3 bg-[#050806] border rounded-xl text-white focus:outline-none placeholder-gray-600 ${billUrlError ? 'border-red-500 focus:border-red-400' : 'border-emerald-900/80 focus:border-emerald-500'}`}
+                        maxLength={10}
+                        value={accountForm.phone}
+                        onChange={(e) => setAccountForm({ ...accountForm, phone: sanitizePhone(e.target.value) })}
+                        className="w-full px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white font-mono text-xs focus:border-emerald-500 focus:outline-none transition-colors"
+                        placeholder="10-digit mobile number"
                       />
-                      {billUrlError && <p role="alert" className="text-[11px] text-red-400 mt-1">{billUrlError}</p>}
-                        </>
-                      )}
-                      {billInputMode === 'upload' && (
-                        <>
-                      <div className="mt-3 rounded-xl border border-dashed border-emerald-800/80 bg-[#07110b] px-3 py-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="min-w-0 flex items-center gap-2 text-[11px]">
-                          <FileText size={15} className="shrink-0 text-emerald-400" />
-                          <span className={uploadedBillName ? 'truncate text-emerald-300 font-semibold' : 'text-gray-400'}>
-                            {uploadedBillName || 'Or upload a JPG, PNG, WEBP, GIF, HEIC image or PDF (max 5 MB)'}
-                          </span>
-                        </div>
-                        <label className="shrink-0 inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-emerald-800 bg-emerald-950/60 px-3 py-2 text-[11px] font-bold text-emerald-400 transition-colors hover:bg-emerald-900/60">
-                          <Upload size={13} />
-                          <span>{uploadedBillName ? 'Replace file' : 'Choose file'}</span>
-                          <input
-                            type="file"
-                            accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf"
-                            className="hidden"
-                            onChange={handleBillFileUpload}
-                          />
-                        </label>
-                      </div>
-                      {billFileError && <p role="alert" className="text-[11px] text-red-400 mt-1">{billFileError}</p>}
-                        </>
-                      )}
-                      <p className="text-[11px] text-gray-500 mt-1">
-                        💡 Tip: You can paste any image link (e.g. Unsplash sample link or image URL) or upload a photo of your latest electricity bill.
-                      </p>
                     </div>
 
+                    <div className="space-y-1.5">
+                      <label className="block text-gray-300 font-semibold">Email Address</label>
+                      <input
+                        type="email"
+                        value={accountForm.email}
+                        onChange={(e) => setAccountForm({ ...accountForm, email: e.target.value })}
+                        className="w-full px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white text-xs focus:border-emerald-500 focus:outline-none transition-colors"
+                        placeholder="name@example.com"
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="block text-gray-300 font-semibold">City</label>
+                      <input
+                        type="text"
+                        value={accountForm.city}
+                        onChange={(e) => setAccountForm({ ...accountForm, city: e.target.value })}
+                        className="w-full px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white text-xs focus:border-emerald-500 focus:outline-none transition-colors"
+                        placeholder="e.g. Mohali, Chandigarh, Zirakpur"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="block text-gray-300 font-semibold">Account Type / Role</label>
+                    <div className="w-full px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white font-bold capitalize flex items-center justify-between">
+                      <span className="text-emerald-400 font-extrabold">{roleDisplayName}</span>
+                      <span className="text-[10px] bg-emerald-950 border border-emerald-800 text-emerald-300 px-2.5 py-0.5 rounded-full font-mono uppercase">
+                        {roleBadgeName}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-center space-x-3 pt-3 border-t border-emerald-950/60">
                     <button
                       type="submit"
-                      disabled={submittingVerify || !verifyForm.consumerNumber.trim() || !isValidElectricityBillDocument(verifyForm.billUrl)}
-                      className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs rounded-full shadow-lg shadow-emerald-500/20 transition-all uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs rounded-full shadow-lg shadow-emerald-500/20 transition-all uppercase tracking-wider cursor-pointer"
                     >
-                      {submittingVerify ? 'Submitting...' : 'Submit Electricity Bill for Admin Verification'}
+                      Save Changes
                     </button>
-                  </form>
-                )}
-              </div>
-            )}
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingAccount(false)}
+                      className="px-5 py-2.5 bg-[#050806] hover:bg-[#09150e] text-gray-400 hover:text-white border border-emerald-950 rounded-full font-bold text-xs transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* ELECTRICITY BILL OWNER VERIFICATION SECTION (Rendered ONLY for Property Owners) */}
+              {user.role === 'owner' && (
+                <div className="border-t border-emerald-950 pt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-base font-bold text-white flex items-center space-x-2">
+                        <span>Electricity Bill Owner Verification</span>
+                      </h4>
+                      <p className="text-xs text-gray-400">
+                        Upload your Electricity Bill & Consumer Number to verify your property ownership. Only verified owners can post property listings.
+                      </p>
+                    </div>
+
+                    {user.ownerVerified || user.verificationStatus === 'approved' ? (
+                      <span className="px-3 py-1 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-xs font-extrabold flex items-center space-x-1">
+                        <ShieldCheck size={14} />
+                        <span>VERIFIED OWNER</span>
+                      </span>
+                    ) : user.verificationStatus === 'pending' ? (
+                      <span className="px-3 py-1 rounded-full bg-amber-950 text-amber-400 border border-amber-800 text-xs font-extrabold flex items-center space-x-1">
+                        <RefreshCw size={14} className="animate-spin" />
+                        <span>PENDING ADMIN REVIEW</span>
+                      </span>
+                    ) : user.verificationStatus === 'rejected' ? (
+                      <span className="px-3 py-1 rounded-full bg-red-950 text-red-400 border border-red-800 text-xs font-extrabold flex items-center space-x-1">
+                        <XCircle size={14} />
+                        <span>VERIFICATION REJECTED</span>
+                      </span>
+                    ) : (
+                      <span className="px-3 py-1 rounded-full bg-gray-900 text-gray-400 border border-gray-800 text-xs font-bold">
+                        NOT VERIFIED
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Status Notice Banner or Verification Form */}
+                  {user.ownerVerified || user.verificationStatus === 'approved' ? (
+                    <div className="space-y-3">
+                      <div className="p-4 bg-[#0d2218] border border-emerald-800/80 rounded-2xl text-xs text-emerald-300 font-medium flex items-center space-x-3">
+                        <CheckCircle2 size={20} className="text-emerald-400 shrink-0" />
+                        <div>
+                          <span className="font-bold block text-white text-sm">Account Fully Verified!</span>
+                          Your Electricity Bill and Consumer Number (<span className="font-mono font-bold text-white break-all">{user.consumerNumber || 'Verified'}</span>) have been approved by Admin. You can post unlimited property listings.
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 rounded-2xl border border-emerald-900/70 bg-[#07110b] p-3 sm:p-4 text-xs">
+                        <div className="rounded-xl border border-emerald-950 bg-[#050806] p-3">
+                          <span className="block text-gray-500 font-medium">Submitted Consumer / CA Number</span>
+                          <span className="mt-1 block font-mono font-bold text-emerald-400 text-sm break-all">{user.consumerNumber || 'Not available'}</span>
+                        </div>
+                        <div className="rounded-xl border border-emerald-950 bg-[#050806] p-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <span className="block text-gray-500 font-medium">Submitted Electricity Bill</span>
+                            <span className="mt-1 block font-bold text-gray-200">
+                              {user.electricityBillUrl ? (user.electricityBillUrl.startsWith('data:') ? 'Uploaded document' : 'Document URL') : 'Not available'}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={!user.electricityBillUrl}
+                            onClick={() => handleViewVerificationDocument(user.electricityBillUrl)}
+                            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-800 bg-emerald-950/60 px-3 py-2 text-[11px] font-bold text-emerald-400 transition-colors hover:bg-emerald-900/60 disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            <FileText size={14} />
+                            <span>View document</span>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ) : user.verificationStatus === 'pending' ? (
+                    <div className="p-4 bg-amber-950/40 border border-amber-800/80 rounded-2xl text-xs text-amber-300 font-medium flex items-center space-x-3">
+                      <RefreshCw size={20} className="text-amber-400 shrink-0 animate-spin" />
+                      <div>
+                        <span className="font-bold block text-white text-sm">Under Review by Admin</span>
+                        Your Electricity Bill (CA/Consumer No: <strong className="font-mono text-amber-400 break-all">{user.consumerNumber}</strong>) is currently being reviewed by our Admin team. You will be able to post properties as soon as it is approved.
+                      </div>
+                    </div>
+                  ) : (
+                    <form onSubmit={handleVerifySubmit} className="space-y-4 max-w-xl text-xs pt-2">
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-gray-300 font-semibold">Electricity Bill Consumer / CA Number *</label>
+                          <span className="text-[10px] text-gray-500 font-mono">
+                            {verifyForm.consumerNumber.length}/15 digits max
+                          </span>
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          maxLength={15}
+                          placeholder="e.g. 1004829103 or CA100982"
+                          value={verifyForm.consumerNumber}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(/[^a-zA-Z0-9]/g, '').slice(0, 15);
+                            setVerifyForm({ ...verifyForm, consumerNumber: val });
+                          }}
+                          className="w-full px-4 py-3 bg-[#050806] border border-emerald-900/80 rounded-xl text-white font-mono focus:border-emerald-500 focus:outline-none placeholder-gray-600 tracking-wider text-sm"
+                        />
+                        <p className="text-[10px] text-gray-400 mt-1">
+                          Enter your 3 to 15 digit Consumer Account (CA) number as printed on your electricity bill.
+                        </p>
+                      </div>
+
+                      <div>
+                        <label className="block text-gray-300 font-semibold mb-2">Electricity Bill Document *</label>
+                        <div className="grid grid-cols-2 gap-2 rounded-xl border border-emerald-950 bg-[#050806] p-1.5 mb-3">
+                          <button
+                            type="button"
+                            onClick={() => selectBillInputMode('url')}
+                            className={`rounded-lg px-3 py-2 text-xs font-bold transition-colors ${billInputMode === 'url' ? 'bg-emerald-500 text-black' : 'text-gray-400 hover:text-white'}`}
+                          >
+                            Use document URL
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => selectBillInputMode('upload')}
+                            className={`rounded-lg px-3 py-2 text-xs font-bold transition-colors ${billInputMode === 'upload' ? 'bg-emerald-500 text-black' : 'text-gray-400 hover:text-white'}`}
+                          >
+                            Upload file
+                          </button>
+                        </div>
+                        {billInputMode === 'url' && (
+                          <>
+                            <input
+                              type="url"
+                              required
+                              placeholder="Paste image link or URL of your electricity bill document"
+                              value={uploadedBillName ? '' : verifyForm.billUrl}
+                              onChange={(e) => {
+                                const billUrl = e.target.value;
+                                setVerifyForm({ ...verifyForm, billUrl });
+                                setUploadedBillName('');
+                                validateBillUrl(billUrl);
+                              }}
+                              onBlur={(e) => validateBillUrl(e.target.value)}
+                              aria-invalid={Boolean(billUrlError)}
+                              className={`w-full px-4 py-3 bg-[#050806] border rounded-xl text-white focus:outline-none placeholder-gray-600 ${billUrlError ? 'border-red-500 focus:border-red-400' : 'border-emerald-900/80 focus:border-emerald-500'}`}
+                            />
+                            {billUrlError && <p role="alert" className="text-[11px] text-red-400 mt-1">{billUrlError}</p>}
+                          </>
+                        )}
+                        {billInputMode === 'upload' && (
+                          <>
+                            <div className="mt-3 rounded-xl border border-dashed border-emerald-800/80 bg-[#07110b] px-3 py-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <div className="min-w-0 flex items-center gap-2 text-[11px]">
+                                <FileText size={15} className="shrink-0 text-emerald-400" />
+                                <span className={uploadedBillName ? 'truncate text-emerald-300 font-semibold' : 'text-gray-400'}>
+                                  {uploadedBillName || 'Or upload a JPG, PNG, WEBP, GIF, HEIC image or PDF (max 5 MB)'}
+                                </span>
+                              </div>
+                              <label className="shrink-0 inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-emerald-800 bg-emerald-950/60 px-3 py-2 text-[11px] font-bold text-emerald-400 transition-colors hover:bg-emerald-900/60">
+                                <Upload size={13} />
+                                <span>{uploadedBillName ? 'Replace file' : 'Choose file'}</span>
+                                <input
+                                  type="file"
+                                  accept="image/jpeg,image/png,image/webp,image/gif,image/heic,image/heif,application/pdf"
+                                  className="hidden"
+                                  onChange={handleBillFileUpload}
+                                />
+                              </label>
+                            </div>
+                            {billFileError && <p role="alert" className="text-[11px] text-red-400 mt-1">{billFileError}</p>}
+                          </>
+                        )}
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          💡 Tip: You can paste any image link (e.g. Unsplash sample link or image URL) or upload a photo of your latest electricity bill.
+                        </p>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={submittingVerify || !verifyForm.consumerNumber.trim() || !isValidElectricityBillDocument(verifyForm.billUrl)}
+                        className="px-6 py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs rounded-full shadow-lg shadow-emerald-500/20 transition-all uppercase tracking-wider cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {submittingVerify ? 'Submitting...' : 'Submit Electricity Bill for Admin Verification'}
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
+
+              {/* TENANT QUICK ACCESS & ACTIVITY SECTION (Rendered for Tenants) */}
+              {user.role !== 'owner' && (
+                <div className="border-t border-emerald-950 pt-6 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-base font-bold text-white flex items-center space-x-2">
+                        <span>Tenant Quick Access & Activities</span>
+                      </h4>
+                      <p className="text-xs text-gray-400">
+                        Manage your rental journey, shortlisted homes, and plan subscriptions.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
+                    {/* Card 1: Wishlist */}
+                    <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 hover:border-emerald-800/70 transition-all flex flex-col justify-between space-y-3 group">
+                      <div className="flex items-start space-x-3">
+                        <div className="w-9 h-9 rounded-xl bg-rose-950/40 text-rose-400 border border-rose-900/40 flex items-center justify-center shrink-0">
+                          <Heart size={16} className="fill-rose-400/20" />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h5 className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">Saved Properties</h5>
+                          <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-2">
+                            {savedProperties.length === 0
+                              ? 'You have not saved any properties yet. Explore listings in Tricity.'
+                              : `You have ${savedProperties.length} ${savedProperties.length === 1 ? 'property' : 'properties'} saved to your wishlist.`}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleTabChange('wishlist')}
+                        className="w-full py-2 bg-[#091f14] hover:bg-emerald-500 hover:text-black text-emerald-400 border border-emerald-800/50 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-1.5"
+                      >
+                        <span>View Saved ({savedProperties.length})</span>
+                        <ArrowRight size={12} />
+                      </button>
+                    </div>
+
+                    {/* Card 2: Billing & Plans */}
+                    <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 hover:border-emerald-800/70 transition-all flex flex-col justify-between space-y-3 group">
+                      <div className="flex items-start space-x-3">
+                        <div className="w-9 h-9 rounded-xl bg-amber-950/40 text-amber-400 border border-amber-900/40 flex items-center justify-center shrink-0">
+                          <Sparkles size={16} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h5 className="text-xs font-bold text-white group-hover:text-amber-300 transition-colors">Subscription & Credits</h5>
+                          <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-2">
+                            {user.activePlan || 'Standard Plan'} • {user.credits ?? 0} direct owner contact credits left.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleTabChange('explore-plans')}
+                        className="w-full py-2 bg-gradient-to-r from-amber-500/15 to-yellow-500/10 hover:from-amber-500 hover:to-yellow-400 text-amber-300 hover:text-black border border-amber-500/30 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-1.5"
+                      >
+                        <span>+ Recharge / Upgrade</span>
+                        <ArrowRight size={12} />
+                      </button>
+                    </div>
+
+                    {/* Card 3: Relax Plan & Assistance */}
+                    <div className="p-4 bg-[#050806] rounded-2xl border border-emerald-950/90 hover:border-emerald-800/70 transition-all flex flex-col justify-between space-y-3 group">
+                      <div className="flex items-start space-x-3">
+                        <div className="w-9 h-9 rounded-xl bg-emerald-950/50 text-emerald-400 border border-emerald-800/50 flex items-center justify-center shrink-0">
+                          <ShieldCheck size={16} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h5 className="text-xs font-bold text-white group-hover:text-emerald-300 transition-colors">Tenant Relax Plan</h5>
+                          <p className="text-[11px] text-gray-400 mt-0.5 line-clamp-2">
+                            Assisted house hunting, verified home visits & seamless rental agreements.
+                          </p>
+                        </div>
+                      </div>
+                      <Link
+                        href="/tenant/relaxplan"
+                        className="w-full py-2 bg-[#091f14] hover:bg-emerald-500 hover:text-black text-emerald-400 border border-emerald-800/50 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-1.5"
+                      >
+                        <span>Explore Relax Plan</span>
+                        <ArrowRight size={12} />
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              )}
 
 
             </div>
@@ -1374,92 +1470,88 @@ function DashboardContent() {
                 {myProperties.map((p: PropertyItem) => {
                   const propThumb = (p.images && p.images.length > 0 ? p.images[0] : null) || p.videoThumbnail || (p.videos && p.videos[0] && p.videos[0].includes('res.cloudinary.com') ? p.videos[0].replace(/\.(mp4|mov|webm|mkv|avi|m4v)(\?.*)?$/i, '.jpg').replace('/video/upload/', '/video/upload/so_0,q_auto,f_auto/') : '') || '';
                   return (
-                  <div key={p.id || p.pid} className="py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                    <div className="flex items-center space-x-4">
-                      {propThumb ? (
-                        <LazyImage src={propThumb} alt={p.title} className="w-16 h-16 rounded-2xl border border-emerald-950 object-cover shrink-0" />
-                      ) : (
-                        <div className="w-16 h-16 rounded-2xl border border-emerald-950 bg-[#06140c] flex items-center justify-center text-emerald-500/60 shrink-0">
-                          <Building size={20} />
+                    <div key={p.id || p.pid} className="py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                      <div className="flex items-center space-x-4">
+                        {propThumb ? (
+                          <LazyImage src={propThumb} alt={p.title} className="w-16 h-16 rounded-2xl border border-emerald-950 object-cover shrink-0" />
+                        ) : (
+                          <div className="w-16 h-16 rounded-2xl border border-emerald-950 bg-[#06140c] flex items-center justify-center text-emerald-500/60 shrink-0">
+                            <Building size={20} />
+                          </div>
+                        )}
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-mono text-xs text-emerald-400 font-extrabold">{p.pid}</span>
+                            {p.verified ? (
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[9px] font-extrabold">VERIFIED & LIVE</span>
+                            ) : (
+                              <span className="px-2 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800 text-[9px] font-extrabold">UNDER REVIEW</span>
+                            )}
+                            {p.available === false && (
+                              <span className="px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-400 border border-zinc-700 text-[9px] font-bold">INACTIVE</span>
+                            )}
+                          </div>
+                          <h4 className="text-sm font-bold text-white mt-0.5">{p.title}</h4>
+                          <p className="text-xs text-gray-400">{p.locality}, {p.city} • {formatPrice(p.price)}</p>
                         </div>
-                      )}
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-mono text-xs text-emerald-400 font-extrabold">{p.pid}</span>
-                          {p.verified ? (
-                            <span className="px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[9px] font-extrabold">VERIFIED & LIVE</span>
-                          ) : (
-                            <span className="px-2 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800 text-[9px] font-extrabold">UNDER REVIEW</span>
-                          )}
-                          {p.available === false && (
-                            <span className="px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-400 border border-zinc-700 text-[9px] font-bold">INACTIVE</span>
-                          )}
-                        </div>
-                        <h4 className="text-sm font-bold text-white mt-0.5">{p.title}</h4>
-                        <p className="text-xs text-gray-400">{p.locality}, {p.city} • ₹{p.price.toLocaleString('en-IN')}</p>
                       </div>
-                    </div>
 
-                    <div className="flex flex-wrap items-center gap-2.5 sm:self-center">
-                      {/* Proper Sliding Toggle Switch */}
-                      <button
-                        type="button"
-                        onClick={() => handleToggleAvailability(p)}
-                        className={`flex items-center space-x-2 px-3 py-1.5 rounded-full border transition-all cursor-pointer select-none ${
-                          p.available !== false
+                      <div className="flex flex-wrap items-center gap-2.5 sm:self-center">
+                        {/* Proper Sliding Toggle Switch */}
+                        <button
+                          type="button"
+                          onClick={() => handleToggleAvailability(p)}
+                          className={`flex items-center space-x-2 px-3 py-1.5 rounded-full border transition-all cursor-pointer select-none ${p.available !== false
                             ? 'bg-[#06180f] border-emerald-800/80 hover:bg-emerald-950/80'
                             : 'bg-[#0e0e0e] border-zinc-800 hover:border-zinc-700'
-                        }`}
-                        title={p.available !== false ? 'Click to make Inactive (Hide from public listings)' : 'Click to make Active (Show in public listings)'}
-                      >
-                        {/* Switch Track */}
-                        <div
-                          className={`w-8 h-4.5 rounded-full transition-colors relative flex items-center p-0.5 ${
-                            p.available !== false
+                            }`}
+                          title={p.available !== false ? 'Click to make Inactive (Hide from public listings)' : 'Click to make Active (Show in public listings)'}
+                        >
+                          {/* Switch Track */}
+                          <div
+                            className={`w-8 h-4.5 rounded-full transition-colors relative flex items-center p-0.5 ${p.available !== false
                               ? 'bg-emerald-500'
                               : 'bg-zinc-600'
-                          }`}
-                        >
-                          {/* Sliding Thumb Knob */}
-                          <div
-                            className={`w-3.5 h-3.5 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${
-                              p.available !== false
+                              }`}
+                          >
+                            {/* Sliding Thumb Knob */}
+                            <div
+                              className={`w-3.5 h-3.5 rounded-full bg-white shadow-md transform transition-transform duration-200 ease-in-out ${p.available !== false
                                 ? 'translate-x-3.5'
                                 : 'translate-x-0'
-                            }`}
-                          />
-                        </div>
+                                }`}
+                            />
+                          </div>
 
-                        {/* Label */}
-                        <span
-                          className={`text-xs font-bold transition-colors ${
-                            p.available !== false
+                          {/* Label */}
+                          <span
+                            className={`text-xs font-bold transition-colors ${p.available !== false
                               ? 'text-emerald-300'
                               : 'text-zinc-400'
-                          }`}
+                              }`}
+                          >
+                            {p.available !== false ? 'Active' : 'Inactive'}
+                          </span>
+                        </button>
+
+                        {/* Edit Button */}
+                        <Link
+                          href={`/post-property?edit=${p.id || p.pid}`}
+                          className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold rounded-full text-xs shadow-md shadow-emerald-500/20 transition-all flex items-center space-x-1.5 cursor-pointer"
                         >
-                          {p.available !== false ? 'Active' : 'Inactive'}
-                        </span>
-                      </button>
+                          <Edit3 size={13} />
+                          <span>Edit</span>
+                        </Link>
 
-                      {/* Edit Button */}
-                      <Link
-                        href={`/post-property?edit=${p.id || p.pid}`}
-                        className="px-3.5 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold rounded-full text-xs shadow-md shadow-emerald-500/20 transition-all flex items-center space-x-1.5 cursor-pointer"
-                      >
-                        <Edit3 size={13} />
-                        <span>Edit</span>
-                      </Link>
-
-                      {/* View Button */}
-                      <Link
-                        href={`/properties/${p.id || p.pid}`}
-                        className="px-3.5 py-1.5 bg-[#06180f] text-emerald-400 border border-emerald-800/60 rounded-full text-xs font-bold hover:bg-emerald-900/60 transition-colors"
-                      >
-                        View Property →
-                      </Link>
+                        {/* View Button */}
+                        <Link
+                          href={`/properties/${p.id || p.pid}`}
+                          className="px-3.5 py-1.5 bg-[#06180f] text-emerald-400 border border-emerald-800/60 rounded-full text-xs font-bold hover:bg-emerald-900/60 transition-colors"
+                        >
+                          View Property →
+                        </Link>
+                      </div>
                     </div>
-                  </div>
                   );
                 })}
               </div>
@@ -1542,8 +1634,11 @@ function DashboardContent() {
                         </td>
                         <td className="py-4 px-4 text-right">
                           <button
-                            onClick={() => showToast(`Downloading Invoice ${item.invoiceNo}...`)}
-                            className="p-2 text-emerald-400 hover:text-emerald-300 bg-[#050806] rounded-xl border border-emerald-950"
+                            type="button"
+                            onClick={() => setSelectedInvoice(item)}
+                            className="p-2 text-emerald-400 hover:text-black hover:bg-emerald-400 bg-[#050806] rounded-xl border border-emerald-950 hover:border-emerald-400 transition-all cursor-pointer inline-flex items-center justify-center shadow-sm active:scale-95"
+                            title={`View & Download Tax Invoice ${item.invoiceNo}`}
+                            aria-label={`View & Download Tax Invoice ${item.invoiceNo}`}
                           >
                             <Download size={14} />
                           </button>
@@ -1740,6 +1835,12 @@ function DashboardContent() {
             )}
           </div>
         )}
+        {/* INVOICE RECEIPT MODAL */}
+        <InvoiceModal
+          invoice={selectedInvoice}
+          user={user}
+          onClose={() => setSelectedInvoice(null)}
+        />
       </div>
     </div>
   );

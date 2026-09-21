@@ -1,12 +1,14 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, Suspense } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import {
   Building, ShieldCheck, Search, Filter, RefreshCw, PlusCircle,
-  CheckCircle2, Clock, Trash2, Edit3, Star, X, MapPin, Phone, XCircle, Video, ExternalLink
+  CheckCircle2, Clock, Trash2, Edit3, Star, X, MapPin, Phone, XCircle, Video, ExternalLink, Sparkles
 } from 'lucide-react';
 import { PropertyItem } from '@/lib/seedData';
+import { formatPrice } from '@/lib/format';
 import { useApp } from '@/context/AppContext';
 import { getCachedProperties, setCachedProperties, hasCachedProperties } from '@/lib/adminCache';
 import { useAdminSync } from '@/hooks/useAdminSync';
@@ -14,7 +16,7 @@ import { TableSkeletonLoader, BrandSpinner } from '@/components/Loader';
 
 function AdminPropertiesContent() {
   const searchParams = useSearchParams();
-  const urlPid = searchParams.get('pid') || '';
+  const urlQuery = searchParams.get('pid') || searchParams.get('search') || '';
   const { showToast } = useApp();
 
   const [properties, setProperties] = useState<PropertyItem[]>(() => getCachedProperties() || []);
@@ -23,13 +25,21 @@ function AdminPropertiesContent() {
   const [actionPendingId, setActionPendingId] = useState<string | null>(null);
 
   // Filters State
-  const [searchTerm, setSearchTerm] = useState(urlPid);
+  const [searchTerm, setSearchTerm] = useState(urlQuery);
   const [cityFilter, setCityFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all'); // all, verified, pending, featured
   const [categoryFilter, setCategoryFilter] = useState('all');
 
   // Pagination State (Show 10 listings initially)
   const [visibleCount, setVisibleCount] = useState(10);
+
+  // Sync searchTerm when URL search params change
+  useEffect(() => {
+    const q = searchParams.get('pid') || searchParams.get('search');
+    if (q !== null && q !== undefined) {
+      setSearchTerm(q);
+    }
+  }, [searchParams]);
 
   // Edit Modal State
   const [editingProperty, setEditingProperty] = useState<PropertyItem | null>(null);
@@ -63,7 +73,7 @@ function AdminPropertiesContent() {
     }
   }, [fetchProperties]);
 
-  // Sync across open admin tabs
+  // Real-time cross-tab sync
   useAdminSync({
     dataType: 'properties',
     onSync: () => {
@@ -85,7 +95,10 @@ function AdminPropertiesContent() {
       const matchPid = (item.pid || '').toLowerCase().includes(q);
       const matchTitle = (item.title || '').toLowerCase().includes(q);
       const matchLocality = (item.locality || '').toLowerCase().includes(q);
-      if (!matchPid && !matchTitle && !matchLocality) return false;
+      const matchOwnerName = (item.ownerName || '').toLowerCase().includes(q);
+      const matchOwnerEmail = (item.ownerEmail || '').toLowerCase().includes(q);
+      const matchOwnerPhone = (item.ownerPhone || '').toLowerCase().includes(q);
+      if (!matchPid && !matchTitle && !matchLocality && !matchOwnerName && !matchOwnerEmail && !matchOwnerPhone) return false;
     }
 
     if (cityFilter !== 'all' && !(item.city || '').toLowerCase().includes(cityFilter.toLowerCase())) {
@@ -302,6 +315,13 @@ function AdminPropertiesContent() {
         </div>
 
         <div className="flex items-center space-x-2 sm:space-x-3 self-start sm:self-auto">
+          <Link
+            href="/admin/properties/quick-ingest"
+            className="px-2.5 py-1.5 sm:px-3.5 sm:py-2 rounded-lg sm:rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black text-[11px] sm:text-xs font-extrabold flex items-center space-x-1.5 transition-all shadow-md shadow-emerald-500/25 cursor-pointer"
+          >
+            <Sparkles size={13} className="text-black" />
+            <span>AI Quick Ingest</span>
+          </Link>
           <button
             onClick={async () => {
               setRefreshing(true);
@@ -440,7 +460,7 @@ function AdminPropertiesContent() {
                   <div className="flex items-center justify-between gap-1.5 flex-wrap pb-2 border-b border-emerald-950/70">
                     <div className="flex items-center space-x-1.5">
                       <span className="px-2 py-0.5 rounded-md bg-emerald-950 text-emerald-400 border border-emerald-800/80 font-mono font-bold text-[11px]">
-                        {item.pid}
+                        PROP-ID: {item.pid?.replace(/^(PZ|LR)-/i, '')}
                       </span>
                       <span className="px-1.5 py-0.5 rounded-full bg-[#0d1f15] border border-emerald-900/80 text-gray-300 text-[9px] font-semibold capitalize">
                         {item.category} • {item.type}
@@ -501,7 +521,7 @@ function AdminPropertiesContent() {
                         <div className="font-bold text-white text-xs line-clamp-1 flex-1">{item.title}</div>
                         <div className="text-right shrink-0">
                           <span className="text-xs font-extrabold text-emerald-400 whitespace-nowrap">
-                            ₹{item.price?.toLocaleString('en-IN')}
+                            {formatPrice(item.price)}
                           </span>
                           <span className="text-[9px] text-gray-500 font-medium block -mt-0.5">
                             {item.category === 'rent' || item.category === 'pg' ? '/mo' : 'total'}
@@ -650,7 +670,7 @@ function AdminPropertiesContent() {
           <table className="w-full min-w-[850px] text-left text-xs text-gray-300">
             <thead className="bg-[#050806] text-gray-400 font-extrabold uppercase tracking-wider text-[10px] border-b border-emerald-950">
               <tr>
-                <th className="p-3.5 whitespace-nowrap">ID</th>
+                <th className="p-3.5 whitespace-nowrap">PROP-ID</th>
                 <th className="p-3.5 min-w-[160px]">Property Details</th>
                 <th className="p-3.5 whitespace-nowrap">Category</th>
                 <th className="p-3.5 whitespace-nowrap">Price</th>
@@ -680,7 +700,7 @@ function AdminPropertiesContent() {
                     >
                       <td className="p-3.5 font-mono font-bold text-emerald-400 whitespace-nowrap">
                         <span className="inline-flex items-center gap-1 group-hover:underline">
-                          {item.pid}
+                          {item.pid?.replace(/^(PZ|LR)-/i, '')}
                           <ExternalLink size={10} className="text-emerald-400/60 group-hover:text-emerald-400 transition-colors" />
                         </span>
                       </td>
@@ -697,7 +717,7 @@ function AdminPropertiesContent() {
                         <div className="text-[10px] text-gray-400 truncate">{item.locality}, {item.city}</div>
                       </td>
                       <td className="p-3.5 capitalize font-semibold whitespace-nowrap">{item.category} ({item.type})</td>
-                      <td className="p-3.5 font-bold text-emerald-400 whitespace-nowrap">₹{item.price?.toLocaleString('en-IN')}</td>
+                      <td className="p-3.5 font-bold text-emerald-400 whitespace-nowrap">{formatPrice(item.price)}</td>
                       <td className="p-3.5 font-mono text-gray-300 whitespace-nowrap">{item.ownerPhone || 'N/A'}</td>
                       <td className="p-3.5 whitespace-nowrap">
                         <div className="flex flex-col space-y-1">
@@ -941,10 +961,11 @@ function AdminPropertiesContent() {
                 <div>
                   <label className="block text-gray-400 font-semibold mb-1">Bedrooms (BHK)</label>
                   <select
-                    value={editingProperty.bedrooms || 1}
+                    value={editingProperty.bedrooms !== undefined ? editingProperty.bedrooms : 1}
                     onChange={(e) => setEditingProperty({ ...editingProperty, bedrooms: Number(e.target.value) })}
                     className="w-full px-3 py-2 bg-[#050806] border border-emerald-900 rounded-xl text-white font-semibold focus:outline-none focus:border-emerald-500"
                   >
+                    <option value={0}>PG</option>
                     <option value={0.5}>1 RK</option>
                     <option value={1}>1 BHK</option>
                     <option value={2}>2 BHK</option>

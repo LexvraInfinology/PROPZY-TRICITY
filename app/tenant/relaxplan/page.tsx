@@ -7,8 +7,8 @@ import { sanitizeName, sanitizePhone, isValidName, isValidPhone } from '@/lib/va
 
 export default function RelaxPlanPage() {
   const { user, showToast } = useApp();
-  const [name, setName] = useState(user ? sanitizeName(user.name) : '');
-  const [phone, setPhone] = useState(user ? sanitizePhone(user.phone) : '');
+  const [name, setName] = useState(user?.name ? sanitizeName(user.name) : '');
+  const [phone, setPhone] = useState(user?.phone ? sanitizePhone(user.phone) : '');
   const [city, setCity] = useState('Mohali');
   const [budget, setBudget] = useState('15000');
   const [bhk, setBhk] = useState('2 BHK');

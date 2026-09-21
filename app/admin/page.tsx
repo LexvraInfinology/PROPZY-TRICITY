@@ -8,6 +8,7 @@ import {
   Trash2, AlertTriangle, ExternalLink
 } from 'lucide-react';
 import { PropertyItem } from '@/lib/seedData';
+import { formatPrice } from '@/lib/format';
 import { useApp } from '@/context/AppContext';
 import { getCachedProperties, setCachedProperties, hasCachedProperties, getCachedInquiries, setCachedInquiries, hasCachedInquiries } from '@/lib/adminCache';
 import { useAdminSync } from '@/hooks/useAdminSync';
@@ -387,8 +388,8 @@ export default function AdminOverviewPage() {
                       {item.pid}
                       <ExternalLink size={9} className="text-emerald-400 opacity-60 group-hover:opacity-100" />
                     </span>
-                    <span className="text-[11px] font-bold text-emerald-400">
-                      ₹{(item.price || 0).toLocaleString('en-IN')}
+                    <span className="text-[11px] font-bold text-emerald-400 whitespace-nowrap">
+                      {formatPrice(item.price)}
                     </span>
                   </div>
 
@@ -469,7 +470,7 @@ export default function AdminOverviewPage() {
                         {item.title}
                       </td>
                       <td className="p-3 text-gray-300">{(item.locality || '')}, {(item.city || '')}</td>
-                      <td className="p-3 font-bold text-emerald-400">₹{(item.price || 0).toLocaleString('en-IN')}</td>
+                      <td className="p-3 font-bold text-emerald-400 whitespace-nowrap">{formatPrice(item.price)}</td>
                       <td className="p-3 font-mono text-gray-300">{item.ownerPhone || 'N/A'}</td>
                       <td className="p-3">
                         {item.verified ? (

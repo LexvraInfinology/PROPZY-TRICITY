@@ -239,7 +239,7 @@ export async function processSubscriptionPayment({
   const existingPayment: any = await Payment.findOne({ paymentId }).lean();
   if (existingPayment) {
     console.log(`[Payment Service] Payment ${paymentId} already processed previously via ${existingPayment.processedVia}. Returning existing record.`);
-    
+
     let dbUser: any = null;
     if (existingPayment.userId) {
       dbUser = await User.findById(existingPayment.userId).lean();
@@ -329,7 +329,7 @@ export async function processSubscriptionPayment({
         processedVia,
         rawWebhookPayload
       });
-    } catch {}
+    } catch { }
 
     return {
       success: true,
@@ -341,8 +341,8 @@ export async function processSubscriptionPayment({
   }
 
   // 4. Resolve Server-Side Plan Parameters (Strict server enforcement)
-  const normalizedAmount = amountInPaiseOrRupees > 10000 
-    ? Math.round(amountInPaiseOrRupees / 100) 
+  const normalizedAmount = amountInPaiseOrRupees > 10000
+    ? Math.round(amountInPaiseOrRupees / 100)
     : Number(amountInPaiseOrRupees) || 0;
 
   const plan = resolveStrictPlan(planName, normalizedAmount);

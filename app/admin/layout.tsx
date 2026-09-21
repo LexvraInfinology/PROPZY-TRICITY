@@ -86,13 +86,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // Automatic Authorization Guard & Silent Redirection
   useEffect(() => {
-    if (!isHydrated || !isSessionChecked || isLoggingOut || pathname === '/admin/login') return;
+    if (!isHydrated || !isSessionChecked || isLoggingOut) return;
 
     if (!user || user.role !== 'admin') {
       if (user && user.role !== 'admin') {
         showToast('Access restricted to Admin accounts');
       }
-      router.replace('/admin/login');
+      const target = `/?auth=login&from=${encodeURIComponent(pathname)}`;
+      router.replace(target);
     }
   }, [user, pathname, isHydrated, isSessionChecked, isLoggingOut, router, showToast]);
 
@@ -105,12 +106,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     window.location.href = '/';
   };
 
-  // 1. Bypass route guard for login page
-  if (pathname === '/admin/login') {
-    return <>{children}</>;
-  }
-
-  // 2. Prevent rendering admin panel before hydration or for non-admin users
+  // Prevent rendering admin panel before hydration or for non-admin users
   if (!isHydrated || !isSessionChecked || !user || user.role !== 'admin') {
     return (
       <div className="bg-[#050806] min-h-screen flex items-center justify-center">

@@ -14,8 +14,8 @@ interface InquiryModalProps {
 
 export const InquiryModal: React.FC<InquiryModalProps> = ({ property, onClose }) => {
   const { user, openAuthModal, showToast } = useApp();
-  const [name, setName] = useState(user ? sanitizeName(user.name) : '');
-  const [phone, setPhone] = useState(user ? sanitizePhone(user.phone) : '');
+  const [name, setName] = useState(user?.name ? sanitizeName(user.name) : '');
+  const [phone, setPhone] = useState(user?.phone ? sanitizePhone(user.phone) : '');
   const [message, setMessage] = useState('Hi, I am interested in visiting this property.');
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(() => {
@@ -50,7 +50,7 @@ export const InquiryModal: React.FC<InquiryModalProps> = ({ property, onClose })
           <div className="space-y-2">
             <h3 className="text-xl font-bold text-white">Login Required</h3>
             <p className="text-xs text-gray-400">
-              You must be logged in to send an inquiry for <strong className="text-emerald-400">{property.pid}</strong>.
+              You must be logged in to send an inquiry for <strong className="text-emerald-400">PROP-ID: {property.pid?.replace(/^(PZ|LR)-/i, '')}</strong>.
             </p>
           </div>
 
@@ -142,7 +142,7 @@ export const InquiryModal: React.FC<InquiryModalProps> = ({ property, onClose })
             </div>
             <h3 className="text-xl font-bold text-white">Inquiry Sent Successfully!</h3>
             <p className="text-xs text-gray-400">
-              The owner/manager for <strong className="text-emerald-400">{property.pid} ({property.locality})</strong> has received your request.
+              The owner/manager for <strong className="text-emerald-400">PROP-ID: {property.pid?.replace(/^(PZ|LR)-/i, '')} ({property.locality})</strong> has received your request.
             </p>
             <div className="p-3.5 bg-[#050806] rounded-xl border border-emerald-900/60 text-xs text-gray-300">
               Your details were shared securely with the property owner/manager. They can contact you directly.
@@ -158,7 +158,7 @@ export const InquiryModal: React.FC<InquiryModalProps> = ({ property, onClose })
           <div>
             <div className="mb-5">
               <span className="inline-block px-3 py-1 bg-[#0f281b] text-emerald-400 border border-emerald-800/80 text-[10px] font-extrabold uppercase rounded-full mb-2">
-                {property.pid} • 0% Brokerage
+                PROP-ID: {property.pid?.replace(/^(PZ|LR)-/i, '')} • 0% Brokerage
               </span>
               <h3 className="text-base font-bold text-white line-clamp-1">{property.title}</h3>
               <p className="text-xs text-gray-400">{property.locality}, {property.city}</p>

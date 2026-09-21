@@ -45,8 +45,8 @@ export default function FAQPage() {
     },
     {
       category: 'tenants',
-      question: 'Can I search properties by Property ID?',
-      answer: 'Yes! Every property has a unique Property ID (e.g., PZ-101). You can type any ID into the search bar to locate that specific listing instantly.',
+      question: 'Can I search properties by PROP-ID?',
+      answer: 'Yes! Every property has a unique PROP-ID (e.g., 101). You can type any PROP-ID into the search bar to locate that specific listing instantly.',
     },
   ];
 

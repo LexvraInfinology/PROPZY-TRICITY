@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, X, ShieldCheck, MapPin, Building, Loader2, ArrowRight } from 'lucide-react';
+import { formatPrice } from '@/lib/format';
 
 interface SuggestionItem {
   _id?: string;
@@ -11,7 +12,7 @@ interface SuggestionItem {
   title: string;
   locality: string;
   city: string;
-  price: number;
+  price: number | string;
   category: string;
   type: string;
   verified?: boolean;
@@ -27,7 +28,7 @@ interface GlobalSearchBarProps {
 }
 
 export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
-  placeholder = 'Search by Title, City, Locality, ID (e.g. 2 BHK, Mohali, PZ-101)...',
+  placeholder = 'Search by Title, City, Locality, PROP-ID (e.g. 2 BHK, Mohali, 101)...',
   mode = 'public',
   className = '',
 }) => {
@@ -145,13 +146,6 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
     }
   };
 
-  const formatPrice = (val: number) => {
-    if (typeof val !== 'number' || isNaN(val) || !val) return '₹0';
-    if (val >= 10000000) return `₹${(val / 10000000).toFixed(2)} Cr`;
-    if (val >= 100000) return `₹${(val / 100000).toFixed(2)} Lakh`;
-    return `₹${val.toLocaleString('en-IN')}`;
-  };
-
   return (
     <div ref={containerRef} className={`relative w-full ${className}`}>
       {/* Search Input Box */}
@@ -237,7 +231,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center space-x-2">
                         <span className="font-mono font-extrabold text-[11px] text-emerald-400 bg-emerald-950/80 border border-emerald-800/80 px-1.5 py-0.5 rounded">
-                          {item.pid}
+                          PROP-ID: {item.pid?.replace(/^(PZ|LR)-/i, '')}
                         </span>
                         <span className="text-xs font-bold text-white truncate">{item.title}</span>
                       </div>
@@ -253,7 +247,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
 
                     {/* Price Badge */}
                     <div className="text-right shrink-0">
-                      <div className="text-xs font-extrabold text-emerald-400">{formatPrice(item.price)}</div>
+                      <div className="text-xs font-extrabold text-emerald-400 whitespace-nowrap">{formatPrice(item.price)}</div>
                       {item.verified && (
                         <div className="inline-flex items-center space-x-0.5 text-[9px] font-bold text-emerald-400">
                           <ShieldCheck size={10} />
@@ -278,7 +272,7 @@ export const GlobalSearchBar: React.FC<GlobalSearchBarProps> = ({
           ) : (
             <div className="p-4 text-center text-xs text-gray-400 space-y-1">
               <p className="font-semibold text-gray-300">No properties found matching &quot;{query}&quot;</p>
-              <p className="text-[11px] text-gray-500">Try searching by ID (e.g. PZ-101), locality, city, or property type.</p>
+              <p className="text-[11px] text-gray-500">Try searching by PROP-ID (e.g. 101), locality, city, or property type.</p>
             </div>
           )}
         </div>

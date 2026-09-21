@@ -24,10 +24,10 @@ export default function NotFound() {
             <span>404 - Page Not Found</span>
           </div>
           <h1 className="text-4xl sm:text-5xl font-extrabold text-white tracking-tight">
-            Lost in Property Search?
+            Page Not Available
           </h1>
           <p className="text-sm sm:text-base text-gray-400 max-w-md mx-auto leading-relaxed">
-            This listing is no longer available. It may have been removed by the owner.
+            The page or listing you are looking for does not exist, has been removed, or is not accessible.
           </p>
         </div>
 
@@ -35,7 +35,7 @@ export default function NotFound() {
         <div className="max-w-lg mx-auto p-2 rounded-2xl bg-[#07130b] border border-emerald-900/60 shadow-xl">
           <GlobalSearchBar
             mode="public"
-            placeholder="Search by ID (e.g. PZ-101), title, city, or locality..."
+            placeholder="Search by PROP-ID (e.g. 101), title, city, or locality..."
           />
         </div>
 

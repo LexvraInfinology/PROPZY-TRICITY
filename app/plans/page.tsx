@@ -225,12 +225,14 @@ export default function ExplorePlansPage() {
                       </div>
                       <span className="font-semibold text-white">100% Zero Brokerage Guarantee</span>
                     </li>
+
                     <li className="flex items-center space-x-2.5">
                       <div className="w-5 h-5 rounded-full bg-emerald-500 text-black flex items-center justify-center shrink-0 shadow-sm">
                         <Check size={13} className="stroke-[3]" />
                       </div>
-                      <span>Instant Property ID (PID) Unlock</span>
+                      <span>Instant PROP-ID unlocks</span>
                     </li>
+                   
                     <li className="flex items-center space-x-2.5">
                       <div className="w-5 h-5 rounded-full bg-emerald-500 text-black flex items-center justify-center shrink-0 shadow-sm">
                         <Check size={13} className="stroke-[3]" />

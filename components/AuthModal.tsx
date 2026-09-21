@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   X, Mail, Lock, User, ShieldCheck, UserCheck, KeyRound, Building,
   Home, ArrowRight, Eye, EyeOff, Check, CheckCircle2, XCircle, AlertCircle, MapPin
@@ -24,10 +24,35 @@ import {
 export const AuthModal: React.FC = () => {
 
   const router = useRouter();
-  const { isAuthModalOpen, closeAuthModal, setUser, user, logoutUser, showToast } = useApp();
+  const searchParams = useSearchParams();
+  const authParam = searchParams?.get('auth');
+  const fromParam = searchParams?.get('from') || '';
+
+  const { isAuthModalOpen, openAuthModal, closeAuthModal, setUser, user, logoutUser, showToast } = useApp();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const modalScrollRef = React.useRef<HTMLDivElement>(null);
   const errorBannerRef = React.useRef<HTMLDivElement>(null);
+
+  // Automatically open modal if ?auth=login or ?auth=register is present
+  React.useEffect(() => {
+    if (authParam === 'login') {
+      setMode('login');
+      openAuthModal();
+    } else if (authParam === 'register') {
+      setMode('register');
+      openAuthModal();
+    }
+  }, [authParam, openAuthModal]);
+
+  const handleModalClose = () => {
+    closeAuthModal();
+    if (typeof window !== 'undefined' && (authParam || fromParam)) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('auth');
+      url.searchParams.delete('from');
+      window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+    }
+  };
 
   // Registration Form State
   const [name, setName] = useState('');
@@ -85,9 +110,19 @@ export const AuthModal: React.FC = () => {
   // Helper for role-based navigation
   const navigateByRole = (userRole: string, openDashboard = false) => {
     closeAuthModal();
+    if (typeof window !== 'undefined' && (authParam || fromParam)) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('auth');
+      url.searchParams.delete('from');
+      window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+    }
+
     if (userRole === 'admin') {
       showToast('Redirecting to Admin Portal Dashboard...');
-      router.replace('/admin');
+      const target = fromParam && fromParam.startsWith('/admin') ? fromParam : '/admin';
+      router.replace(target);
+    } else if (fromParam && !fromParam.startsWith('/admin')) {
+      router.push(fromParam);
     } else if (openDashboard && userRole === 'owner') {
       router.push('/dashboard?tab=my-properties');
     } else if (openDashboard) {
@@ -221,20 +256,25 @@ export const AuthModal: React.FC = () => {
 
   const handleLogout = () => {
     logoutUser();
-    closeAuthModal();
+    handleModalClose();
     router.replace('/');
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200">
+    <div 
+      onClick={(e) => {
+        if (e.target === e.currentTarget) handleModalClose();
+      }}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in duration-200"
+    >
       <div 
         ref={modalScrollRef}
         className="relative w-full max-w-md bg-[#0a110d] rounded-3xl shadow-2xl overflow-hidden border border-emerald-900/80 p-6 sm:p-8 text-gray-100 max-h-[92vh] overflow-y-auto scroll-smooth"
       >
         {/* Close Button */}
         <button
-          onClick={closeAuthModal}
-          className="absolute top-4 right-4 p-2 rounded-full text-gray-400 hover:text-white hover:bg-emerald-950 transition-colors"
+          onClick={handleModalClose}
+          className="absolute top-4 right-4 p-2 rounded-full text-gray-400 hover:text-white hover:bg-emerald-950 transition-colors cursor-pointer"
         >
           <X size={20} />
         </button>
@@ -338,7 +378,7 @@ export const AuthModal: React.FC = () => {
               <form onSubmit={handleLoginSubmit} className="space-y-4">
                 {/* Email / Identifier */}
                 <div>
-                  <label className="block text-xs font-semibold text-gray-300 mb-1">Email Address</label>
+                  <label className="block text-xs font-semibold text-gray-300 mb-1">Email, Mobile, or Admin ID</label>
                   <div className="flex items-center border border-emerald-900/80 bg-[#050806] rounded-xl overflow-hidden focus-within:border-emerald-500 transition-all">
                     <span className="px-3 text-emerald-400">
                       <Mail size={16} />
@@ -347,7 +387,7 @@ export const AuthModal: React.FC = () => {
                       type="text"
                       value={loginIdentifier}
                       onChange={(e) => setLoginIdentifier(e.target.value)}
-                      placeholder="abc@gmail.com"
+                      placeholder="name@example.com, mobile or admin ID"
                       className="w-full py-3 pr-3 text-xs text-white placeholder-gray-600 bg-transparent focus:outline-none"
                       required
                       autoFocus

@@ -154,8 +154,10 @@ export async function GET(req: NextRequest) {
       }
       if (city && city !== 'all') filter.city = new RegExp(escapeRegex(city), 'i');
       if (locality) filter.locality = new RegExp(escapeRegex(locality), 'i');
-      if (type && type !== 'all') filter.type = type;
-      if (pid) filter.pid = pid.trim().toUpperCase();
+      if (pid) {
+        const clean = pid.trim().replace(/^(PZ|LR)-/i, '');
+        filter.pid = { $in: [clean, `PZ-${clean}`, `LR-${clean}`, pid.trim(), pid.trim().toUpperCase()] };
+      }
       if (bedrooms && bedrooms !== 'all') {
         if (typeof bedrooms === 'string' && bedrooms.includes(',')) {
           const bhkList = bedrooms.split(',').map(b => Number(b.trim())).filter(n => !isNaN(n));
@@ -433,8 +435,10 @@ export async function POST(req: NextRequest) {
       ? body.images.filter((img: string) => typeof img === 'string' && img.trim().length > 0)
       : [];
 
-    // Generate guaranteed unique PID to prevent MongoDB unique index collisions
-    const pidGenerated = body.pid || `PZ-${Date.now().toString().slice(-4)}${Math.floor(10 + Math.random() * 90)}`;
+    // Generate guaranteed unique clean numeric PID (without PZ- prefix)
+    const pidGenerated = (body.pid && typeof body.pid === 'string' && body.pid.trim())
+      ? body.pid.trim().replace(/^(PZ|LR)-/i, '')
+      : `${Date.now().toString().slice(-4)}${Math.floor(10 + Math.random() * 90)}`;
     const resolvedOwnerName = (body.ownerName && typeof body.ownerName === 'string' && body.ownerName.trim()) 
       ? body.ownerName.trim() 
       : (existingUser?.name || authUser.name || 'Property Owner');
@@ -466,7 +470,7 @@ export async function POST(req: NextRequest) {
       address: body.address || `${body.locality || 'Sector 70'}, ${body.city || 'Mohali'}`,
       price: parsePriceOrDeposit(body.price, 10000),
       deposit: parsePriceOrDeposit(body.deposit, 0),
-      bedrooms: body.bedrooms !== undefined && !isNaN(Number(body.bedrooms)) ? Number(body.bedrooms) : (body.category === 'commercial' || body.type === 'commercial' ? 0 : 1),
+      bedrooms: body.bedrooms !== undefined && !isNaN(Number(body.bedrooms)) ? Number(body.bedrooms) : (body.category === 'commercial' || body.type === 'commercial' || body.category === 'pg' || body.type === 'pg' ? 0 : 1),
       bathrooms: body.bathrooms !== undefined && !isNaN(Number(body.bathrooms)) ? Number(body.bathrooms) : 1,
       areaSqFt: body.areaSqFt && Number(body.areaSqFt) > 0 ? Number(body.areaSqFt) : null,
       furnishing: validFurnishing.includes(body.furnishing) ? body.furnishing : 'semi-furnished',
@@ -502,6 +506,16 @@ export async function POST(req: NextRequest) {
     }
 
     if (created) {
+      if (existingUser?._id) {
+        try {
+          await User.findByIdAndUpdate(existingUser._id, {
+            $addToSet: { postedProperties: pidGenerated }
+          });
+        } catch (uUpdateErr) {
+          console.warn('Failed to push pid to user.postedProperties:', uUpdateErr);
+        }
+      }
+
       return NextResponse.json({
         success: true,
         data: created,

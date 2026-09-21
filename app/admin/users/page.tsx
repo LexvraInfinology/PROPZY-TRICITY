@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Users, ShieldCheck, UserCheck, Search, Filter, RefreshCw, Phone, Mail, Building } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { getCachedUsers, setCachedUsers, hasCachedUsers } from '@/lib/adminCache';
@@ -21,7 +22,7 @@ export default function AdminUsersPage() {
       const data = await res.json();
       if (data.success && Array.isArray(data.data)) {
         setUsers(data.data);
-        setCachedUsers(data.data, false);
+        setCachedUsers(data.data, true);
       }
     } catch (err) {
       console.error('Failed to fetch users:', err);
@@ -31,8 +32,11 @@ export default function AdminUsersPage() {
   }, []);
 
   useEffect(() => {
+    // Show cached immediately, and silently revalidate in background to keep listings count accurate
     if (!hasCachedUsers()) {
       fetchUsers(false);
+    } else {
+      fetchUsers(true);
     }
   }, [fetchUsers]);
 
@@ -121,9 +125,19 @@ export default function AdminUsersPage() {
       {/* Main Table & Mobile Cards */}
       <div className="bg-[#0a110d] rounded-2xl sm:rounded-3xl border border-emerald-950/90 shadow-xl overflow-hidden">
         <div className="p-2.5 sm:p-4 border-b border-emerald-950 flex items-center justify-between">
-          <span className="text-[11px] sm:text-xs font-bold text-gray-300">
-            Total Users: <span className="text-emerald-400 font-extrabold">{filteredUsers.length}</span> of {users.length}
-          </span>
+          <div className="flex items-center space-x-2">
+            <span className="text-[11px] sm:text-xs font-bold text-gray-300">
+              Total Users: <span className="text-emerald-400 font-extrabold">{filteredUsers.length}</span> of {users.length}
+            </span>
+            <button
+              onClick={() => fetchUsers(false)}
+              disabled={loading}
+              className="p-1 sm:p-1.5 rounded-lg bg-[#050806] border border-emerald-950 hover:border-emerald-500 text-gray-400 hover:text-emerald-400 transition-all cursor-pointer"
+              title="Refresh users and listing counts"
+            >
+              <RefreshCw size={11} className={loading ? 'animate-spin text-emerald-400' : ''} />
+            </button>
+          </div>
           {loading && (
             <span className="text-[11px] sm:text-xs text-emerald-400 font-bold flex items-center space-x-1.5 animate-pulse">
               <RefreshCw size={11} className="animate-spin" />
@@ -152,25 +166,37 @@ export default function AdminUsersPage() {
                   key={`m-${u.id || u._id || u.email}`}
                   className="p-3 space-y-2 bg-[#08120c] border border-emerald-900/70 rounded-xl shadow-md"
                 >
-                  <div className="flex items-center justify-between gap-1.5">
-                    <div className="flex items-center space-x-2">
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <div className="flex items-center space-x-2 min-w-0 flex-1">
                       <div className="w-7 h-7 rounded-full bg-emerald-500 text-black font-extrabold flex items-center justify-center text-[10px] shadow shrink-0">
                         {(u.name || 'U').charAt(0).toUpperCase()}
                       </div>
-                      <div>
-                        <div className="font-bold text-white text-xs flex items-center space-x-1">
-                          <span>{u.name || 'Anonymous User'}</span>
+                      <div className="min-w-0 flex-1">
+                        <div className="font-bold text-white text-xs flex items-center space-x-1 min-w-0">
+                          <span className="truncate">{u.name || 'Anonymous User'}</span>
                           {u.ownerVerified && (
-                            <span className="text-[8px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-1 py-0.2 rounded font-bold">
+                            <span className="text-[8px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-1 py-0.2 rounded font-bold shrink-0">
                               Verified
                             </span>
                           )}
                         </div>
-                        <div className="text-[10px] text-gray-400 font-mono">{u.email}</div>
+                        <div
+                          className="text-[10px] text-gray-400 font-mono truncate cursor-pointer hover:text-emerald-400 transition-colors"
+                          title={`Click to copy: ${u.email}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (u.email && navigator.clipboard) {
+                              navigator.clipboard.writeText(u.email);
+                              showToast('Email copied to clipboard!');
+                            }
+                          }}
+                        >
+                          {u.email}
+                        </div>
                       </div>
                     </div>
 
-                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold whitespace-nowrap uppercase tracking-wider border ${isAdmin
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold whitespace-nowrap uppercase tracking-wider border shrink-0 ${isAdmin
                         ? 'bg-purple-950/80 text-purple-400 border-purple-800/80'
                         : isOwner
                           ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/80'
@@ -180,11 +206,15 @@ export default function AdminUsersPage() {
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between text-[10px] text-gray-400 pt-1 border-t border-emerald-950/70">
-                    <div className="font-mono">{u.phone || 'No phone'}</div>
-                    <div className="text-emerald-400 font-bold">
+                  <div className="flex items-center justify-between text-[10px] text-gray-400 pt-1 border-t border-emerald-950/70 min-w-0">
+                    <div className="font-mono truncate mr-2">{u.phone || 'No phone'}</div>
+                    <Link
+                      href={`/admin/properties?search=${encodeURIComponent(u.email || u.name || '')}`}
+                      className="text-emerald-400 font-bold shrink-0 hover:underline hover:text-emerald-300 transition-colors"
+                      title="View user listings in Property Manager"
+                    >
                       {u.propertiesCount !== undefined ? u.propertiesCount : (u.postedProperties?.length || 0)} Listings
-                    </div>
+                    </Link>
                   </div>
                 </div>
               );
@@ -224,20 +254,32 @@ export default function AdminUsersPage() {
 
                   return (
                     <tr key={u.id || u._id || u.email} className="hover:bg-[#07120a] transition-colors">
-                      <td className="p-3.5 flex items-center space-x-3">
-                        <div className="w-8 h-8 rounded-full bg-emerald-500 text-black font-extrabold flex items-center justify-center text-xs shadow">
+                      <td className="p-3.5 flex items-center space-x-3 min-w-0 max-w-[280px]">
+                        <div className="w-8 h-8 rounded-full bg-emerald-500 text-black font-extrabold flex items-center justify-center text-xs shadow shrink-0">
                           {(u.name || 'U').charAt(0).toUpperCase()}
                         </div>
-                        <div>
-                          <div className="font-bold text-white flex items-center space-x-1.5">
-                            <span>{u.name || 'Anonymous User'}</span>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-white flex items-center space-x-1.5 min-w-0">
+                            <span className="truncate">{u.name || 'Anonymous User'}</span>
                             {u.ownerVerified && (
-                              <span className="text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-1.5 py-0.2 rounded-full font-bold">
+                              <span className="text-[9px] bg-emerald-950 text-emerald-400 border border-emerald-800 px-1.5 py-0.2 rounded-full font-bold shrink-0">
                                 Verified
                               </span>
                             )}
                           </div>
-                          <div className="text-[10px] text-gray-400 font-mono">{u.email}</div>
+                          <div
+                            className="text-[10px] text-gray-400 font-mono truncate cursor-pointer hover:text-emerald-400 transition-colors"
+                            title={`Click to copy: ${u.email}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (u.email && navigator.clipboard) {
+                                navigator.clipboard.writeText(u.email);
+                                showToast('Email copied to clipboard!');
+                              }
+                            }}
+                          >
+                            {u.email}
+                          </div>
                         </div>
                       </td>
                       <td className="p-3.5 font-mono text-gray-300">{u.phone || 'Not provided'}</td>
@@ -252,7 +294,13 @@ export default function AdminUsersPage() {
                         </span>
                       </td>
                       <td className="p-3.5 font-bold text-white">
-                        {u.propertiesCount !== undefined ? u.propertiesCount : (u.postedProperties?.length || 0)} Listings
+                        <Link
+                          href={`/admin/properties?search=${encodeURIComponent(u.email || u.name || '')}`}
+                          className="hover:text-emerald-400 hover:underline transition-colors"
+                          title="View user listings in Property Manager"
+                        >
+                          {u.propertiesCount !== undefined ? u.propertiesCount : (u.postedProperties?.length || 0)} Listings
+                        </Link>
                       </td>
                       <td className="p-3.5 text-right">
                         <button

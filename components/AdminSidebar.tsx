@@ -24,6 +24,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({ isOpen = true, onClo
   const menuItems = [
     { label: 'Overview', href: '/admin', icon: LayoutDashboard },
     { label: 'Property Manager', href: '/admin/properties', icon: Building, badge: 'All ID' },
+    { label: 'AI Quick Ingest', href: '/admin/properties/quick-ingest', icon: Sparkles, badge: 'AI' },
     { label: 'Inquiries & Leads', href: '/admin/inquiries', icon: MessageSquare },
     { label: 'Contact Messages', href: '/admin/contacts', icon: Mail },
     { label: 'User Directory', href: '/admin/users', icon: Users },

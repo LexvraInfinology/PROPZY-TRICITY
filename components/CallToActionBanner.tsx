@@ -40,9 +40,9 @@ export const CallToActionBanner: React.FC<CallToActionBannerProps> = ({
           <div className="text-[10px] sm:text-[11px] font-extrabold tracking-widest text-emerald-400 uppercase font-mono">
             {subTag}
           </div>
-          <h2 className="text-xl sm:text-4xl font-serif font-bold text-white tracking-tight">
-            <span className="block sm:inline">{titleMain}</span>{' '}
-            <span className="block sm:inline italic font-normal text-emerald-400 drop-shadow-sm">
+          <h2 className="text-[16px] xs:text-[18px] sm:text-4xl font-serif font-bold text-white tracking-tight whitespace-nowrap sm:whitespace-normal">
+            <span className="inline">{titleMain}</span>{' '}
+            <span className="inline italic font-normal text-emerald-400 drop-shadow-sm">
               {titleItalic}
             </span>
           </h2>

@@ -1040,7 +1040,7 @@ export default function PropertyDetailPage() {
                 const displayPhone = CENTRAL_CONTACT_PHONE.display;
                 const cleanPhone = CENTRAL_CONTACT_PHONE.intlClean;
 
-                if (isUnlocked) {
+                if (isUnlocked) {     
                   return (
                     <div className="space-y-2.5">
                       <div className="p-3.5 bg-emerald-950/60 border border-emerald-800/80 rounded-2xl text-center space-y-1">

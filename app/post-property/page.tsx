@@ -1307,7 +1307,7 @@ function PostPropertyContent() {
           {/* STEP 2: Specs & Amenities */}
           {step === 2 && (
             <div className="space-y-5 sm:space-y-6 text-xs">
-              <div className={isCommercial ? "grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4" : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4"}>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 sm:gap-4">
                 {isCommercial ? (
                   <div>
                     <label className="block text-gray-300 font-semibold mb-1">Commercial Space Type</label>

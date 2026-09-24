@@ -17,7 +17,10 @@ function MobileBottomNavContent() {
     setMounted(true);
   }, []);
 
-  if (pathname && pathname.startsWith('/admin')) {
+  const role = (user?.role || '').toLowerCase().trim();
+  const isSalesExecutive = role === 'sales executive' || role === 'sales_executive' || user?.email?.toLowerCase().trim() === 'pawanpropzy@gmail.com' || user?.email?.toLowerCase().trim() === 'chandnirathore0963@gmail.com';
+
+  if (pathname && (pathname.startsWith('/admin') || pathname.startsWith('/sales') || (isSalesExecutive && pathname.startsWith('/dashboard')))) {
     return null;
   }
 

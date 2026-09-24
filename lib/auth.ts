@@ -5,7 +5,7 @@ export interface JWTPayload {
   id: string;
   name: string;
   email: string;
-  role: 'tenant' | 'owner' | 'admin' | 'sales executive'| string;
+  role: 'tenant' | 'owner' | 'admin' | 'sales executive' | 'sales_executive' | string;
   [key: string]: any;
 }
 

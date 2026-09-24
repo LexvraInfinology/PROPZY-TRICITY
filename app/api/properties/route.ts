@@ -255,7 +255,7 @@ export async function GET(req: NextRequest) {
       const fetchLimit = includeTotal ? limit : limit + 1;
 
       // 2. Projected lightweight listing fields
-      const projection = 'pid title category type city locality address price deposit bedrooms bathrooms areaSqFt furnishing verified featured images videos videoThumbnail ownerEmail ownerRole available createdAt';
+      const projection = 'pid title category type city locality address price deposit bedrooms bathrooms areaSqFt furnishing verified featured images videos videoThumbnail ownerName ownerPhone ownerEmail ownerRole available createdAt';
 
       const tQueryStart = performance.now();
       console.log('[API Properties] Filter:', JSON.stringify(filter), 'Limit:', fetchLimit);
@@ -292,7 +292,7 @@ export async function GET(req: NextRequest) {
       // 6. Access Control & Owner Contact Masking
       const tAccessStart = performance.now();
       const sanitizedProperties = properties.map((property: any) =>
-        serializeProperty(property, canViewPropertyContactDetails(property, authUser))
+        serializeProperty(property, isAdminView || canViewPropertyContactDetails(property, authUser))
       );
       const durAccess = (performance.now() - tAccessStart).toFixed(2);
 

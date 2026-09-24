@@ -69,6 +69,8 @@ const UserSchema: Schema = new Schema({
 
 // Query & Filter performance indexes
 UserSchema.index({ phone: 1 });
+UserSchema.index({ role: 1, createdAt: -1 });
+UserSchema.index({ activePlan: 1, credits: 1, createdAt: -1 });
 UserSchema.index({ verificationStatus: 1, createdAt: -1 });
 UserSchema.index({ 'billingHistory.orderId': 1 });
 UserSchema.index({ 'billingHistory.paymentId': 1 });

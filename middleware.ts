@@ -41,8 +41,8 @@ export async function middleware(req: NextRequest) {
     }
   }
 
-  // 2. Browser document navigations to internal admin/debug/seed API routes
-  if (isBrowserDoc && (pathname.startsWith('/api/admin') || pathname === '/api/test-db' || pathname === '/api/seed')) {
+  // 2. Browser document navigations to internal admin/sales/debug/seed API routes
+  if (isBrowserDoc && (pathname.startsWith('/api/admin') || pathname.startsWith('/api/sales') || pathname === '/api/test-db' || pathname === '/api/seed')) {
     return NextResponse.rewrite(new URL('/not-found', req.url), { status: 404 });
   }
 
@@ -80,6 +80,41 @@ export async function middleware(req: NextRequest) {
       }
     } catch {
       return buildHomeAuthRedirect();
+    }
+  }
+
+  // 5. Protect sales executive portal routes (/sales)
+  if (pathname.startsWith('/sales')) {
+    const cookieToken = req.cookies.get(AUTH_COOKIE_NAME)?.value;
+
+    // Non-authenticated visitors redirect directly to standard normal login page
+    if (!cookieToken) {
+      const redirectUrl = new URL('/', req.url);
+      redirectUrl.searchParams.set('auth', 'login');
+      return NextResponse.redirect(redirectUrl);
+    }
+
+    try {
+      const verified = await jwtVerify(cookieToken, SECRET_KEY);
+      const authUser: any = verified.payload;
+      const role = (authUser?.role || '').toLowerCase().trim();
+      const isSales = role === 'sales_executive' || role === 'sales executive';
+      const isAdmin = role === 'admin';
+
+      if (!authUser) {
+        const redirectUrl = new URL('/', req.url);
+        redirectUrl.searchParams.set('auth', 'login');
+        return NextResponse.redirect(redirectUrl);
+      }
+
+      if (!isSales && !isAdmin) {
+        // Authenticated non-sales users (tenants/owners) redirect to standard dashboard
+        return NextResponse.redirect(new URL('/dashboard', req.url));
+      }
+    } catch {
+      const redirectUrl = new URL('/', req.url);
+      redirectUrl.searchParams.set('auth', 'login');
+      return NextResponse.redirect(redirectUrl);
     }
   }
 

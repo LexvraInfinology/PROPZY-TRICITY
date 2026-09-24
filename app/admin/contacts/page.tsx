@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Mail, MessageSquare, Building2, User, Calendar, CheckCircle2,
   Clock, Search, ArrowUpRight, Sparkles, Filter, RefreshCw, Send, Trash2,
-  Tag, Check, Archive, Inbox, AlertCircle
+  Tag, Check, Archive, Inbox, AlertCircle, Copy
 } from 'lucide-react';
 import { useApp } from '@/context/AppContext';
 import { getCachedContacts, setCachedContacts, hasCachedContacts } from '@/lib/adminCache';
@@ -280,7 +280,7 @@ export default function AdminContactsPage() {
             return (
               <div
                 key={id}
-                className={`bg-[#08120c] rounded-xl sm:rounded-2xl border p-3 sm:p-5 transition-all shadow-md space-y-2.5 sm:space-y-3.5 ${
+                className={`bg-[#08120c] rounded-xl sm:rounded-2xl border p-4 sm:p-5 transition-all shadow-md space-y-3.5 sm:space-y-4 ${
                   item.status === 'pending'
                     ? 'border-amber-700/60 bg-[#0d140e]'
                     : item.status === 'replied'
@@ -288,61 +288,109 @@ export default function AdminContactsPage() {
                     : 'border-gray-800/80 opacity-75'
                 }`}
               >
-                {/* Header row: Sender + Badges + Date */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 border-b border-emerald-950/80 pb-2.5 sm:pb-3">
-                  <div className="flex items-center space-x-2.5 sm:space-x-3">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-[#0e261a] border border-emerald-800/80 text-emerald-400 flex items-center justify-center font-bold text-xs sm:text-sm shrink-0 shadow">
-                      {item.fullName.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="flex items-center space-x-1.5 flex-wrap">
-                        <span className="text-xs sm:text-sm font-bold text-white">{item.fullName}</span>
-                        {item.company && (
-                          <span className="text-[9px] sm:text-[10px] bg-[#0d261a] text-emerald-300 border border-emerald-800/80 px-1.5 py-0.2 rounded-full font-bold">
-                            🏢 {item.company}
-                          </span>
-                        )}
-                        <span className="text-[9px] sm:text-[10px] bg-[#1a1c0d] text-amber-300 border border-amber-800/60 px-1.5 py-0.2 rounded-full font-semibold">
-                          {item.inquiryType}
-                        </span>
+                {/* Header Section: Sender + Badges + Contact Meta */}
+                <div className="space-y-3 border-b border-emerald-950/80 pb-3 sm:pb-4">
+                  {/* Top Line: Avatar + Name + Badges */}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start space-x-3 min-w-0">
+                      <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl bg-gradient-to-br from-[#0e2c1d] to-[#081a11] border border-emerald-800/80 text-emerald-400 flex items-center justify-center font-extrabold text-sm sm:text-base shrink-0 shadow-md">
+                        {item.fullName.charAt(0).toUpperCase()}
                       </div>
-                      <a
-                        href={`mailto:${item.workEmail}`}
-                        className="text-[11px] sm:text-xs text-emerald-400 hover:underline flex items-center space-x-1 mt-0.5"
-                      >
-                        <Mail size={11} />
-                        <span>{item.workEmail}</span>
-                      </a>
+
+                      <div className="min-w-0 space-y-1.5">
+                        <div className="flex items-center space-x-2 flex-wrap gap-y-1">
+                          <span className="text-sm sm:text-base font-extrabold text-white tracking-tight break-words">
+                            {item.fullName}
+                          </span>
+                          {item.company && (
+                            <span className="text-[10px] sm:text-[11px] bg-[#0d261a] text-emerald-300 border border-emerald-800/80 px-2 py-0.5 rounded-md font-semibold shrink-0">
+                              🏢 {item.company}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Badges: Category & Status */}
+                        <div className="flex items-center space-x-2 flex-wrap gap-y-1 pt-0.5">
+                          <span className={`text-[10px] sm:text-[11px] px-2.5 py-0.5 rounded-full font-bold border ${
+                            item.inquiryType === 'Corporate Partnership'
+                              ? 'bg-purple-950/80 text-purple-300 border-purple-800/80'
+                              : item.inquiryType === 'Property Listing Help'
+                              ? 'bg-cyan-950/80 text-cyan-300 border-cyan-800/80'
+                              : item.inquiryType === 'Tenant / Owner Help'
+                              ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800/80'
+                              : 'bg-[#1a1c0d] text-amber-300 border-amber-800/60'
+                          }`}>
+                            {item.inquiryType}
+                          </span>
+
+                          <span
+                            className={`text-[9.5px] sm:text-[10.5px] px-2.5 py-0.5 rounded-full font-extrabold uppercase tracking-wider border ${
+                              item.status === 'pending'
+                                ? 'bg-amber-950/80 text-amber-300 border-amber-700/60'
+                                : item.status === 'replied'
+                                ? 'bg-emerald-950/80 text-emerald-400 border-emerald-700/60'
+                                : 'bg-gray-900 text-gray-400 border-gray-700'
+                            }`}
+                          >
+                            {item.status}
+                          </span>
+                        </div>
+                      </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center space-x-2 self-start sm:self-auto">
-                    <span className="text-[10px] sm:text-[11px] text-gray-500 font-medium">{dateStr}</span>
-                    <span
-                      className={`text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full font-extrabold capitalize border ${
-                        item.status === 'pending'
-                          ? 'bg-amber-950/80 text-amber-300 border-amber-700/60'
-                          : item.status === 'replied'
-                          ? 'bg-emerald-950/80 text-emerald-400 border-emerald-700/60'
-                          : 'bg-gray-900 text-gray-400 border-gray-700'
-                      }`}
+                  {/* Sub-line: Email & Timestamp with generous spacing */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 pt-1 text-xs text-gray-400">
+                    <a
+                      href={`mailto:${item.workEmail}`}
+                      className="text-xs sm:text-[13px] text-emerald-400 hover:text-emerald-300 hover:underline flex items-center space-x-1.5 font-mono truncate"
+                      title={`Send email to ${item.workEmail}`}
                     >
-                      {item.status}
+                      <Mail size={13} className="shrink-0 text-emerald-400" />
+                      <span className="truncate">{item.workEmail}</span>
+                    </a>
+
+                    <span className="text-[11px] text-gray-400 font-medium flex items-center space-x-1.5 shrink-0">
+                      <Clock size={12} className="text-gray-500 shrink-0" />
+                      <span>{dateStr}</span>
                     </span>
                   </div>
                 </div>
 
-                {/* Message Body */}
-                <div className="bg-[#050806] rounded-lg sm:rounded-xl p-2.5 sm:p-3.5 border border-emerald-950/80 text-[11px] sm:text-xs text-gray-200 leading-relaxed font-normal whitespace-pre-wrap">
-                  {item.message}
+                {/* Message Body - Modern Dark Card with Accent Header */}
+                <div className="relative bg-gradient-to-b from-[#050f09] to-[#030805] rounded-xl sm:rounded-2xl p-3.5 sm:p-4 border border-emerald-950/90 shadow-inner space-y-2">
+                  <div className="flex items-center justify-between border-b border-emerald-950/70 pb-2">
+                    <div className="flex items-center space-x-1.5 text-[10px] sm:text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider">
+                      <MessageSquare size={13} className="text-emerald-400 shrink-0" />
+                      <span>Message Content</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (navigator.clipboard) {
+                          navigator.clipboard.writeText(item.message);
+                          showToast('Message text copied to clipboard!');
+                        }
+                      }}
+                      className="inline-flex items-center space-x-1 text-[10px] text-gray-400 hover:text-emerald-300 hover:bg-emerald-950/80 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                      title="Copy message text"
+                    >
+                      <Copy size={11} />
+                      <span>Copy</span>
+                    </button>
+                  </div>
+
+                  <div className="text-xs sm:text-[13px] text-gray-200 leading-relaxed font-normal whitespace-pre-wrap break-words pl-0.5 select-text">
+                    {item.message}
+                  </div>
                 </div>
 
                 {/* Actions Footer */}
-                <div className="flex flex-wrap items-center justify-between gap-1.5 pt-0.5">
-                  <div className="flex items-center space-x-1.5 flex-wrap gap-y-1">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1.5 border-t border-emerald-950/80">
+                  <div className="flex items-center space-x-1.5 flex-wrap gap-y-1.5">
                     <a
                       href={`mailto:${item.workEmail}?subject=${encodeURIComponent(`Re: Propzy Tricity - ${item.inquiryType}`)}&body=${encodeURIComponent(`Hi ${item.fullName},\n\nThank you for reaching out to Propzy regarding: "${item.message.slice(0, 80)}..."\n\n`)}`}
-                      className="inline-flex items-center space-x-1 px-2.5 py-1 sm:px-3 sm:py-1.5 h-7 rounded-lg sm:rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-[10px] sm:text-xs transition-colors cursor-pointer shadow"
+                      className="inline-flex items-center space-x-1.5 px-3 py-1.5 h-7 sm:h-8 rounded-lg sm:rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-[10px] sm:text-xs transition-colors cursor-pointer shadow active:scale-95"
                     >
                       <Send size={11} />
                       <span>Reply Email</span>
@@ -351,7 +399,7 @@ export default function AdminContactsPage() {
                     {item.status !== 'replied' && (
                       <button
                         onClick={() => handleStatusChange(id, 'replied')}
-                        className="inline-flex items-center space-x-1 px-2.5 py-1 sm:px-3 sm:py-1.5 h-7 rounded-lg sm:rounded-xl bg-[#0b1610] hover:bg-[#122319] text-emerald-400 border border-emerald-800 text-[10px] sm:text-xs font-bold transition-colors cursor-pointer"
+                        className="inline-flex items-center space-x-1 px-2.5 py-1 sm:px-3 sm:py-1.5 h-7 sm:h-8 rounded-lg sm:rounded-xl bg-[#0b1610] hover:bg-[#122319] text-emerald-400 border border-emerald-800 text-[10px] sm:text-xs font-bold transition-colors cursor-pointer active:scale-95"
                       >
                         <Check size={11} />
                         <span>Mark Replied</span>
@@ -361,17 +409,17 @@ export default function AdminContactsPage() {
                     {item.status !== 'pending' && (
                       <button
                         onClick={() => handleStatusChange(id, 'pending')}
-                        className="inline-flex items-center space-x-1 px-2.5 py-1 sm:px-3 sm:py-1.5 h-7 rounded-lg sm:rounded-xl bg-[#0b1610] hover:bg-[#122319] text-amber-400 border border-amber-900/60 text-[10px] sm:text-xs font-bold transition-colors cursor-pointer"
+                        className="inline-flex items-center space-x-1 px-2.5 py-1 sm:px-3 sm:py-1.5 h-7 sm:h-8 rounded-lg sm:rounded-xl bg-[#0b1610] hover:bg-[#122319] text-amber-400 border border-amber-900/60 text-[10px] sm:text-xs font-bold transition-colors cursor-pointer active:scale-95"
                       >
                         <Clock size={11} />
-                        <span>Mark Pending</span>
+                        <span>{item.status === 'archived' ? 'Unarchive' : 'Mark Pending'}</span>
                       </button>
                     )}
 
                     {item.status !== 'archived' && (
                       <button
                         onClick={() => handleStatusChange(id, 'archived')}
-                        className="inline-flex items-center space-x-1 px-2 py-1 sm:px-2.5 sm:py-1.5 h-7 rounded-lg sm:rounded-xl bg-[#0b1610] hover:bg-[#122319] text-gray-400 hover:text-white border border-emerald-950 text-[10px] sm:text-xs font-bold transition-colors cursor-pointer"
+                        className="inline-flex items-center space-x-1 px-2 py-1 sm:px-2.5 sm:py-1.5 h-7 sm:h-8 rounded-lg sm:rounded-xl bg-[#0b1610] hover:bg-[#122319] text-gray-400 hover:text-white border border-emerald-950 text-[10px] sm:text-xs font-bold transition-colors cursor-pointer active:scale-95"
                         title="Archive message"
                       >
                         <Archive size={11} />
@@ -380,14 +428,17 @@ export default function AdminContactsPage() {
                     )}
                   </div>
 
-                  <button
-                    onClick={() => handleDelete(id)}
-                    disabled={deletingId === id}
-                    className="p-1 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer"
-                    title="Delete message"
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  <div className="flex items-center justify-end">
+                    <button
+                      onClick={() => handleDelete(id)}
+                      disabled={deletingId === id}
+                      className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg text-gray-500 hover:text-red-400 hover:bg-red-950/40 transition-colors cursor-pointer text-[10px] sm:text-[11px] font-semibold"
+                      title="Delete message"
+                    >
+                      <Trash2 size={13} />
+                      <span className="sm:hidden">Delete</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             );

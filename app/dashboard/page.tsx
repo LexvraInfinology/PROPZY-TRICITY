@@ -268,9 +268,13 @@ function DashboardContent() {
     };
   }, [setUser]);
 
-  // Auto-sync Pawan Kumar role to sales executive
+  // Auto-sync executive roles to sales executive
   useEffect(() => {
-    if (user?.email && user.email.toLowerCase().trim() === 'pawanpropzy@gmail.com') {
+    const isExecutiveEmail = user?.email && (
+      user.email.toLowerCase().trim() === 'pawanpropzy@gmail.com' ||
+      user.email.toLowerCase().trim() === 'chandnirathore0963@gmail.com'
+    );
+    if (isExecutiveEmail) {
       if (user.role !== 'sales executive') {
         setUser({
           ...user,
@@ -628,14 +632,14 @@ function DashboardContent() {
                   {roleBadgeName}
                 </span>
 
-                {user.role !== 'owner' && (
+                {!isPawanPropzy && user.role !== 'owner' && (
                   <span className="inline-flex items-center space-x-1.5 text-[10px] font-extrabold px-2.5 sm:px-3 py-0.5 rounded-full bg-gradient-to-r from-amber-500/20 to-yellow-500/10 border border-amber-500/50 text-amber-300 shadow-sm">
                     <Sparkles size={11} className="text-amber-400 shrink-0" />
                     <span>{user.activePlan || 'Standard Plan'}</span>
                   </span>
                 )}
 
-                {user.role !== 'owner' && (
+                {!isPawanPropzy && user.role !== 'owner' && (
                   <span className="inline-flex items-center space-x-1.5 text-[10px] font-extrabold px-2.5 sm:px-3 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-700/60 text-emerald-300 shadow-sm">
                     <Zap size={11} className="text-emerald-400 fill-emerald-400 shrink-0" />
                     <span>{user.credits ?? 0} Credits</span>
@@ -651,7 +655,16 @@ function DashboardContent() {
           </div>
 
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full lg:w-auto">
-            {user.role !== 'owner' && (
+            {isPawanPropzy ? (
+              <button
+                type="button"
+                onClick={() => router.push('/sales')}
+                className="w-full sm:w-auto px-5 py-3 sm:py-2.5 bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-black rounded-xl sm:rounded-full text-xs font-black transition-all flex items-center justify-center space-x-2 shadow-lg shadow-emerald-500/20 cursor-pointer active:scale-95 whitespace-nowrap"
+              >
+                <ShieldCheck size={14} className="stroke-[2.5]" />
+                <span>Open Sales Desk</span>
+              </button>
+            ) : user.role !== 'owner' && (
               <button
                 type="button"
                 onClick={() => handleTabChange('explore-plans')}
@@ -818,19 +831,38 @@ function DashboardContent() {
                     {/* Div 2: Image, Name & Employee ID */}
                     <div className="flex flex-col items-center text-center space-y-2 pt-1">
                       <div className="relative">
-                        <img
-                          src="/Pawan_image.jpeg"
-                          alt="Pawan Kumar"
-                          className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl object-cover border-2 border-emerald-400 shadow-xl shadow-emerald-950/80 ring-4 ring-emerald-500/20"
-                        />
+                        {user?.avatar ? (
+                          <img
+                            src={user.avatar}
+                            alt={user.name || 'Sales Executive'}
+                            className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl object-cover border-2 border-emerald-400 shadow-xl shadow-emerald-950/80 ring-4 ring-emerald-500/20"
+                          />
+                        ) : user?.email?.toLowerCase().trim() === 'pawanpropzy@gmail.com' ? (
+                          <img
+                            src="/Pawan_image.jpeg"
+                            alt="Pawan Kumar"
+                            className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl object-cover border-2 border-emerald-400 shadow-xl shadow-emerald-950/80 ring-4 ring-emerald-500/20"
+                          />
+                        ) : (
+                          <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-2xl bg-gradient-to-br from-emerald-600 via-emerald-700 to-teal-900 text-white flex flex-col items-center justify-center border-2 border-emerald-400 shadow-xl shadow-emerald-950/80 ring-4 ring-emerald-500/20">
+                            <span className="text-4xl sm:text-5xl font-black">
+                              {(user?.name || 'C').charAt(0).toUpperCase()}
+                            </span>
+                            <span className="text-[9px] uppercase font-bold tracking-widest text-emerald-200 mt-1">
+                              Executive
+                            </span>
+                          </div>
+                        )}
                         <div className="absolute -bottom-2 -right-2 bg-emerald-500 text-black p-1 rounded-full shadow-md">
                           <ShieldCheck size={16} className="stroke-[2.5]" />
                         </div>
                       </div>
                       <div className="pt-1">
-                        <h3 className="text-xl font-extrabold text-white tracking-wide">Pawan Kumar</h3>
+                        <h3 className="text-xl font-extrabold text-white tracking-wide">
+                          {user?.name || 'Sales Executive'}
+                        </h3>
                         <div className="text-xs font-mono font-bold text-emerald-400 mt-0.5 bg-emerald-950/90 px-2.5 py-0.5 rounded-full border border-emerald-800/80 inline-block">
-                          Employee ID: PZ-EMP-001
+                          Employee ID: {user?.email?.toLowerCase().trim() === 'chandnirathore0963@gmail.com' ? 'PZ-EMP-002' : user?.email?.toLowerCase().trim() === 'pawanpropzy@gmail.com' ? 'PZ-EMP-001' : 'PZ-EMP-002'}
                         </div>
                       </div>
                     </div>
@@ -854,9 +886,9 @@ function DashboardContent() {
                         4th Floor, D 256, Industrial Area, Sector 75, Sahibzada Ajit Singh Nagar, Punjab 140307
                       </p>
                       <div className="flex items-center justify-center space-x-3 text-[10px] font-mono text-gray-400 pt-0.5">
-                        <span> 9317902609</span>
+                        <span>{user?.phone || '9317902609'}</span>
                         <span>•</span>
-                        <span> pawanpropzy@gmail.com  </span>
+                        <span>{user?.email || 'chandnirathore0963@gmail.com'}</span>
                       </div>
                     </div>
 
@@ -1728,11 +1760,11 @@ function DashboardContent() {
               {/* Plan 2: ₹999 - 100 Contact Credits / 90 Days */}
               <div className="bg-[#06140c] border-2 border-emerald-500/80 hover:border-emerald-400 transition-all rounded-3xl p-6 sm:p-8 space-y-6 flex flex-col justify-between shadow-2xl shadow-emerald-950/50 relative">
                 {/* Popular Badge */}
-                <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-emerald-500 text-black text-[10px] font-extrabold uppercase px-4 py-1 rounded-full shadow-md tracking-wider">
-                  ★ Most Popular • Best Value
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-black text-[9.5px] sm:text-[10.5px] font-extrabold uppercase px-3.5 sm:px-4 py-0.5 sm:py-1 rounded-full shadow-lg tracking-wider whitespace-nowrap flex items-center space-x-1 z-10">
+                  <span>★ Most Popular • Best Value</span>
                 </div>
 
-                <div className="space-y-4 pt-1">
+                <div className="space-y-4 pt-2">
                   <div className="flex items-center justify-between">
                     <span className="px-3 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider bg-emerald-950 text-emerald-400 border border-emerald-800">
                       Premium Plan

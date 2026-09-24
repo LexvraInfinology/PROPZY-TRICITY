@@ -4,6 +4,17 @@ export const normalizeEmail = (email?: string | null) => (email || '').toLowerCa
 
 export const isAdminUser = (authUser?: JWTPayload | null) => authUser?.role === 'admin';
 
+export const isSalesUser = (authUser?: JWTPayload | null) => {
+  const role = (authUser?.role || '').toLowerCase().trim();
+  return role === 'sales_executive' || role === 'sales executive';
+};
+
+export const isSalesOrAdmin = (authUser?: JWTPayload | null) =>
+  isAdminUser(authUser) || isSalesUser(authUser);
+
+export const canAccessSalesPortal = (authUser?: JWTPayload | null) =>
+  isSalesOrAdmin(authUser);
+
 export const isOwnedByUser = (ownerEmail: string | undefined, authUser?: JWTPayload | null) => {
   const normalizedOwnerEmail = normalizeEmail(ownerEmail);
   const normalizedAuthEmail = normalizeEmail(authUser?.email);

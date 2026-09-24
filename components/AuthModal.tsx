@@ -44,16 +44,6 @@ export const AuthModal: React.FC = () => {
     }
   }, [authParam, openAuthModal]);
 
-  const handleModalClose = () => {
-    closeAuthModal();
-    if (typeof window !== 'undefined' && (authParam || fromParam)) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete('auth');
-      url.searchParams.delete('from');
-      window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
-    }
-  };
-
   // Registration Form State
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -93,6 +83,52 @@ export const AuthModal: React.FC = () => {
     }
   }, [error]);
 
+  // Reset all registration & login inputs to initial blank state
+  const resetForm = React.useCallback(() => {
+    setName('');
+    setEmail('');
+    setPhone('');
+    setCity('Mohali');
+    setPassword('');
+    setConfirmPassword('');
+    setRegisterRole('tenant');
+    setShowLoginPassword(false);
+    setShowRegisterPassword(false);
+    setShowConfirmPassword(false);
+    setLoginIdentifier('');
+    setLoginPassword('');
+    setError('');
+  }, []);
+
+  const handleModalClose = React.useCallback(() => {
+    resetForm();
+    closeAuthModal();
+    if (typeof window !== 'undefined' && (authParam || fromParam)) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('auth');
+      url.searchParams.delete('from');
+      window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
+    }
+  }, [closeAuthModal, authParam, fromParam, resetForm]);
+
+  // Reset all fields whenever the modal is closed or cancelled
+  React.useEffect(() => {
+    if (!isAuthModalOpen) {
+      resetForm();
+    }
+  }, [isAuthModalOpen, resetForm]);
+
+  // Close and reset modal on Escape key press
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isAuthModalOpen) {
+        handleModalClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAuthModalOpen, handleModalClose]);
+
   if (!isAuthModalOpen) return null;
 
   // Google Auth Handlers
@@ -117,11 +153,16 @@ export const AuthModal: React.FC = () => {
       window.history.replaceState({}, '', url.pathname + (url.search ? url.search : ''));
     }
 
-    if (userRole === 'admin') {
+    const roleKey = (userRole || '').toLowerCase().trim();
+    if (roleKey === 'admin') {
       showToast('Redirecting to Admin Portal Dashboard...');
       const target = fromParam && fromParam.startsWith('/admin') ? fromParam : '/admin';
       router.replace(target);
-    } else if (fromParam && !fromParam.startsWith('/admin')) {
+    } else if (roleKey === 'sales_executive' || roleKey === 'sales executive') {
+      showToast('Redirecting to Sales Desk...');
+      const target = fromParam && fromParam.startsWith('/sales') ? fromParam : '/sales';
+      router.replace(target);
+    } else if (fromParam && !fromParam.startsWith('/admin') && !fromParam.startsWith('/sales')) {
       router.push(fromParam);
     } else if (openDashboard && userRole === 'owner') {
       router.push('/dashboard?tab=my-properties');
@@ -240,18 +281,6 @@ export const AuthModal: React.FC = () => {
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const resetForm = () => {
-    setName('');
-    setEmail('');
-    setPhone('');
-    setCity('Mohali');
-    setPassword('');
-    setConfirmPassword('');
-    setLoginIdentifier('');
-    setLoginPassword('');
-    setError('');
   };
 
   const handleLogout = () => {

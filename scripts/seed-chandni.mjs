@@ -47,16 +47,15 @@ const UserSchema = new mongoose.Schema({
 
 const User = mongoose.models.User || mongoose.model('User', UserSchema);
 
-async function seedPawan() {
+async function seedChandni() {
   console.log('Connecting to MongoDB Atlas...');
   await mongoose.connect(process.env.MONGODB_URI, { family: 4 });
   console.log('Connected to MongoDB Atlas successfully!\n');
 
-  const email = 'pawanpropzy@gmail.com';
-  const name = 'Pawan Kumar';
+  const email = 'chandnirathore0963@gmail.com';
+  const name = 'Chandni';
   const role = 'sales executive';
-  const phone = '9317902609';
-  const rawPassword = 'Pawan@123';
+  const rawPassword = 'Chandni@123';
 
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(rawPassword, salt);
@@ -67,12 +66,11 @@ async function seedPawan() {
     console.log(`Found existing user with email ${email}. Updating details...`);
     existing.name = name;
     existing.role = role;
-    existing.phone = phone;
+    existing.password = hashedPassword;
     existing.ownerVerified = true;
     existing.verificationStatus = 'approved';
-    if (!existing.password) {
-      existing.password = hashedPassword;
-    }
+    existing.credits = 0;
+    existing.activePlan = 'None';
     await existing.save();
     console.log('Updated user:', {
       id: existing._id,
@@ -86,7 +84,7 @@ async function seedPawan() {
     const newUser = await User.create({
       name,
       email,
-      phone,
+      phone: '',
       password: hashedPassword,
       role,
       city: 'Mohali',
@@ -95,26 +93,29 @@ async function seedPawan() {
       credits: 0,
       activePlan: 'None'
     });
-    console.log('Created user:', {
+    console.log('Created user successfully:', {
       id: newUser._id,
       name: newUser.name,
       email: newUser.email,
-      phone: newUser.phone,
-      role: newUser.role
+      role: newUser.role,
+      activePlan: newUser.activePlan,
+      credits: newUser.credits
     });
   }
 
-  console.log('\nDefault credentials for Pawan Kumar:');
-  console.log(`- Email: ${email}`);
+  console.log('\n=============================================');
+  console.log('Credentials added successfully:');
+  console.log(`- Name:     ${name}`);
+  console.log(`- Email:    ${email}`);
   console.log(`- Password: ${rawPassword}`);
-  console.log(`- Role: ${role}`);
-  console.log(`- Phone: ${phone}`);
+  console.log(`- Role:     ${role}`);
+  console.log('=============================================\n');
 
   await mongoose.disconnect();
-  console.log('\nMongoDB connection closed.');
+  console.log('MongoDB connection closed.');
 }
 
-seedPawan().catch((err) => {
+seedChandni().catch((err) => {
   console.error('Error seeding user:', err);
   process.exit(1);
 });

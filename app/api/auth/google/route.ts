@@ -94,7 +94,8 @@ export async function POST(req: NextRequest) {
         } else {
           // Auto-provision new Google user
           const generatedPassword = await bcrypt.hash(randomUUID(), 10);
-          const initialRole = email === 'pawanpropzy@gmail.com' ? 'sales executive' : 'tenant';
+          const isSalesEmail = email === 'pawanpropzy@gmail.com' || email === 'chandnirathore0963@gmail.com';
+          const initialRole = isSalesEmail ? 'sales executive' : 'tenant';
           dbUser = await User.create({
             name,
             email,
@@ -105,8 +106,8 @@ export async function POST(req: NextRequest) {
             role: initialRole,
             city: 'Mohali',
             wishlist: [],
-            ownerVerified: email === 'pawanpropzy@gmail.com',
-            verificationStatus: email === 'pawanpropzy@gmail.com' ? 'approved' : 'none',
+            ownerVerified: isSalesEmail,
+            verificationStatus: isSalesEmail ? 'approved' : 'none',
           });
         }
         break;

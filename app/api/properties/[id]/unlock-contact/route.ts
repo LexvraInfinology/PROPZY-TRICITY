@@ -127,14 +127,13 @@ export async function POST(
       }, { status: 403 });
     }
 
-    // 6. Deduct 1 Credit & Save Unlocked Property
-    dbUser.credits = Math.max(0, currentCredits - 1);
+    // 6. Save Unlocked Property (Credits do not decrease on contact unlock)
     dbUser.unlockedProperties.push(propKey);
     await dbUser.save();
 
     return NextResponse.json({
       success: true,
-      message: `🎉 Contact unlocked successfully! 1 credit used. Remaining credits: ${dbUser.credits}`,
+      message: `Contact unlocked successfully! Remaining credits: ${dbUser.credits}`,
       ownerPhone,
       ownerName,
       alreadyUnlocked: false,

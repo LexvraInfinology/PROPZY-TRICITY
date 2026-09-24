@@ -562,12 +562,19 @@ function AdminPropertiesContent() {
                   </div>
 
                   {/* Owner Contact Bar */}
-                  <div className="flex items-center justify-around py-1.5 px-2.5 rounded-lg bg-[#040805] border border-emerald-950/80 text-[10px]">
-                    <span className="text-gray-400 text-[10px]">Owner:</span>
+                  <div className="flex items-center justify-between py-1.5 px-2.5 rounded-lg bg-[#040805] border border-emerald-950/80 text-[10px]" onClick={(e) => e.stopPropagation()}>
+                    <div className="flex items-center space-x-1.5 truncate mr-2">
+                      <span className="text-gray-400 text-[10px]">Owner:</span>
+                      <span className="text-white font-medium truncate max-w-[120px]" title={item.ownerName || 'Owner'}>
+                        {item.ownerName || 'Direct Owner'}
+                      </span>
+                    </div>
                     {item.ownerPhone ? (
                       <a
-                        href={`tel:${item.ownerPhone}`}
-                        className="font-mono font-bold text-emerald-400 flex items-center space-x-1 hover:underline whitespace-nowrap text-[11px]"
+                        href={`tel:${String(item.ownerPhone).replace(/\s+/g, '')}`}
+                        onClick={(e) => e.stopPropagation()}
+                        className="font-mono font-bold text-emerald-400 flex items-center space-x-1 hover:underline whitespace-nowrap text-[11px] shrink-0"
+                        title={`Call ${item.ownerName || 'Owner'} (${item.ownerPhone})`}
                       >
                         <Phone size={10} className="stroke-[2.5]" />
                         <span>{item.ownerPhone}</span>
@@ -675,16 +682,15 @@ function AdminPropertiesContent() {
                 <th className="p-3.5 whitespace-nowrap">Category</th>
                 <th className="p-3.5 whitespace-nowrap">Price</th>
                 <th className="p-3.5 whitespace-nowrap">Owner Contact</th>
-                <th className="p-3.5 whitespace-nowrap">Status</th>
                 <th className="p-3.5 text-right whitespace-nowrap">Moderation Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-emerald-950/60">
               {loading && properties.length === 0 ? (
-                <TableSkeletonLoader rows={6} cols={7} message="Loading properties..." />
+                <TableSkeletonLoader rows={6} cols={6} message="Loading properties..." />
               ) : filteredProperties.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-gray-400">
+                  <td colSpan={6} className="p-8 text-center text-gray-400">
                     No properties match your filter criteria.
                   </td>
                 </tr>
@@ -707,6 +713,12 @@ function AdminPropertiesContent() {
                       <td className="p-3.5 max-w-xs">
                         <div className="flex items-center space-x-1.5">
                           <div className="font-bold text-white truncate group-hover:text-emerald-300 transition-colors">{item.title}</div>
+                          {item.featured && (
+                            <span className="px-1.5 py-0.2 rounded bg-purple-950 text-purple-300 border border-purple-800 text-[8px] font-extrabold flex items-center space-x-0.5 shrink-0" title="Featured Listing">
+                              <Star size={8} className="fill-purple-300 text-purple-300" />
+                              <span>Featured</span>
+                            </span>
+                          )}
                           {item.videos && item.videos.length > 0 && (
                             <span className="px-1.5 py-0.2 rounded bg-emerald-950 text-emerald-400 border border-emerald-800 text-[8px] font-extrabold flex items-center space-x-0.5 shrink-0" title="Walkthrough Video Tour Available">
                               <Video size={8} />
@@ -718,38 +730,26 @@ function AdminPropertiesContent() {
                       </td>
                       <td className="p-3.5 capitalize font-semibold whitespace-nowrap">{item.category} ({item.type})</td>
                       <td className="p-3.5 font-bold text-emerald-400 whitespace-nowrap">{formatPrice(item.price)}</td>
-                      <td className="p-3.5 font-mono text-gray-300 whitespace-nowrap">{item.ownerPhone || 'N/A'}</td>
-                      <td className="p-3.5 whitespace-nowrap">
-                        <div className="flex flex-col space-y-1">
-                          {item.available === false ? (
-                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-zinc-900 text-zinc-400 border border-zinc-700 text-[9px] font-bold w-fit whitespace-nowrap">
-                              <span>INACTIVE</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[9px] font-bold w-fit whitespace-nowrap">
-                              <span>ACTIVE</span>
-                            </span>
-                          )}
-
-                          {item.verified ? (
-                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-400 border border-emerald-800 text-[9px] font-extrabold w-fit whitespace-nowrap">
-                              <CheckCircle2 size={11} />
-                              <span>VERIFIED</span>
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-amber-950 text-amber-400 border border-amber-800 text-[9px] font-extrabold w-fit whitespace-nowrap">
-                              <Clock size={11} />
-                              <span>UNVERIFIED</span>
-                            </span>
-                          )}
-
-                          {item.featured && (
-                            <span className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-purple-950 text-purple-400 border border-purple-800 text-[9px] font-extrabold w-fit whitespace-nowrap">
-                              <Star size={11} />
-                              <span>FEATURED</span>
-                            </span>
-                          )}
-                        </div>
+                      <td className="p-3.5 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        {item.ownerPhone ? (
+                          <div className="flex flex-col space-y-0.5">
+                            <a
+                              href={`tel:${String(item.ownerPhone).replace(/\s+/g, '')}`}
+                              className="font-mono font-bold text-emerald-400 hover:text-emerald-300 hover:underline inline-flex items-center gap-1.5 w-fit"
+                              title={`Call ${item.ownerName || 'Owner'} (${item.ownerPhone})`}
+                            >
+                              <Phone size={11} className="stroke-[2.5] text-emerald-400 shrink-0" />
+                              <span>{item.ownerPhone}</span>
+                            </a>
+                            {item.ownerName && (
+                              <span className="text-[10px] text-gray-400 truncate max-w-[140px]" title={item.ownerName}>
+                                {item.ownerName}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="font-mono text-gray-500">N/A</span>
+                        )}
                       </td>
                       <td className="p-3.5 text-right whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                         <div className="inline-flex items-center justify-end space-x-1.5">
@@ -973,6 +973,30 @@ function AdminPropertiesContent() {
                     <option value={4}>4 BHK</option>
                     <option value={5}>4+ BHK / Villa</option>
                   </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-gray-400 font-semibold mb-1">Owner Name</label>
+                  <input
+                    type="text"
+                    value={editingProperty.ownerName || ''}
+                    onChange={(e) => setEditingProperty({ ...editingProperty, ownerName: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#050806] border border-emerald-900 rounded-xl text-white font-medium"
+                    placeholder="Owner name"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-gray-400 font-semibold mb-1">Owner Contact Number</label>
+                  <input
+                    type="text"
+                    value={editingProperty.ownerPhone || ''}
+                    onChange={(e) => setEditingProperty({ ...editingProperty, ownerPhone: e.target.value })}
+                    className="w-full px-3 py-2 bg-[#050806] border border-emerald-900 rounded-xl text-white font-mono"
+                    placeholder="Owner phone"
+                  />
                 </div>
               </div>
 

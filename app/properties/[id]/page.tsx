@@ -1074,9 +1074,57 @@ export default function PropertyDetailPage() {
                 }
 
                 if (user?.role === 'owner') {
+                  const isOwnListing = Boolean(
+                    (property.ownerEmail && user?.email && property.ownerEmail.toLowerCase() === user.email.toLowerCase()) ||
+                    (property.ownerPhone && user?.phone && property.ownerPhone.replace(/\D/g, '').endsWith(user.phone.replace(/\D/g, '').slice(-10)))
+                  );
+
+                  if (isOwnListing) {
+                    return (
+                      <div className="p-4 bg-[#0a1f14] border border-emerald-800/80 rounded-2xl text-center space-y-2.5 shadow-lg">
+                        <div className="flex items-center justify-center space-x-1.5 text-xs font-bold text-emerald-400">
+                          <CheckCircle2 size={15} />
+                          <span>Your Listed Property</span>
+                        </div>
+                        <p className="text-xs text-gray-300 leading-relaxed">
+                          This is your published listing. Inquiries from verified tenants are forwarded directly to your phone & WhatsApp.
+                        </p>
+                        <Link
+                          href={`/post-property?edit=${property.pid || property.id || id}`}
+                          className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs rounded-xl transition-all flex items-center justify-center space-x-1.5 cursor-pointer shadow active:scale-95"
+                        >
+                          <Edit3 size={14} />
+                          <span>Edit / Manage Listing</span>
+                        </Link>
+                      </div>
+                    );
+                  }
+
                   return (
-                    <div className="p-3 bg-emerald-950/40 border border-emerald-900/60 rounded-2xl text-center">
-                      <p className="text-xs text-gray-300">This property is listed on PROPZY. Inquiries are sent directly to the owner.</p>
+                    <div className="p-4 bg-[#08170f] border border-emerald-900/80 rounded-2xl text-center space-y-3 shadow-lg">
+                      <div className="flex items-center justify-center space-x-1.5 text-xs font-bold text-emerald-400">
+                        <Building2 size={15} />
+                        <span>Property Owner Account</span>
+                      </div>
+                      <p className="text-xs text-gray-300 leading-relaxed">
+                        You are signed in as a Property Owner. Direct contact unlocks and plans are designed for tenants seeking homes.
+                      </p>
+                      <div className="space-y-2 pt-0.5">
+                        <button
+                          type="button"
+                          onClick={() => setShowInquiryModal(true)}
+                          className="w-full py-2.5 bg-emerald-500 hover:bg-emerald-400 text-black font-extrabold text-xs rounded-xl transition-all flex items-center justify-center space-x-1.5 cursor-pointer shadow active:scale-95"
+                        >
+                          <PhoneCall size={14} />
+                          <span>Send Property Inquiry</span>
+                        </button>
+                        <Link
+                          href="/dashboard?tab=my-properties"
+                          className="w-full py-2 bg-[#050f0a] hover:bg-[#0a1e14] text-emerald-400 border border-emerald-900/80 font-bold text-[11px] rounded-xl transition-all flex items-center justify-center space-x-1.5 cursor-pointer"
+                        >
+                          <span>Manage My Properties</span>
+                        </Link>
+                      </div>
                     </div>
                   );
                 }

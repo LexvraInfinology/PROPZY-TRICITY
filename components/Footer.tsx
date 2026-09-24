@@ -3,6 +3,7 @@
 import React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useApp } from '@/context/AppContext';
 import {
   Home, ShieldCheck, Smartphone, Instagram, UserCheck, Percent, Heart,
   Building, Building2, Landmark, Hotel, Castle
@@ -22,6 +23,7 @@ const WhatsAppIcon: React.FC<{ size?: number; className?: string }> = ({ size = 
 
 export const Footer: React.FC = () => {
   const pathname = usePathname();
+  const { user } = useApp();
 
   const majorCities = [
     { name: 'Mohali', href: '/properties?city=Mohali', icon: Building2 },
@@ -31,8 +33,16 @@ export const Footer: React.FC = () => {
     { name: 'Kharar', href: '/properties?city=Kharar', icon: Castle },
   ];
 
-  // Hide Footer on Admin portal routes (called after all hook declarations)
-  if (pathname && pathname.startsWith('/admin')) {
+  const role = (user?.role || '').toLowerCase().trim();
+  const isSalesExecutive = role === 'sales executive' || role === 'sales_executive' || user?.email?.toLowerCase().trim() === 'pawanpropzy@gmail.com' || user?.email?.toLowerCase().trim() === 'chandnirathore0963@gmail.com';
+
+  // Hide Footer on Admin and Sales portal routes
+  if (pathname && (pathname.startsWith('/admin') || pathname.startsWith('/sales'))) {
+    return null;
+  }
+
+  // Remove footer on dashboard for sales executive role
+  if (isSalesExecutive && pathname && pathname.startsWith('/dashboard')) {
     return null;
   }
 

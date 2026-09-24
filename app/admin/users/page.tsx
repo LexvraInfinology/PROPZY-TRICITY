@@ -13,7 +13,7 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<any[]>(() => getCachedUsers() || []);
   const [loading, setLoading] = useState<boolean>(() => !hasCachedUsers());
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'owner' | 'tenant' | 'admin'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'owner' | 'tenant' | 'sales' | 'admin'>('all');
 
   const fetchUsers = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -56,14 +56,21 @@ export default function AdminUsersPage() {
 
   const filteredUsers = users.filter((u) => {
     const roleKey = (u.role || '').toLowerCase();
-    const normalizedRole = roleKey.includes('admin') ? 'admin' : roleKey.includes('owner') || roleKey.includes('landlord') ? 'owner' : 'tenant';
+    const isSales = roleKey.includes('sales');
+    const normalizedRole = roleKey.includes('admin')
+      ? 'admin'
+      : isSales
+      ? 'sales'
+      : roleKey.includes('owner') || roleKey.includes('landlord')
+      ? 'owner'
+      : 'tenant';
     if (roleFilter !== 'all' && normalizedRole !== roleFilter) return false;
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
       const matchName = (u.name || '').toLowerCase().includes(q);
       const matchEmail = (u.email || '').toLowerCase().includes(q);
       const matchPhone = (u.phone || '').includes(q);
-      const matchRole = normalizedRole.includes(q);
+      const matchRole = (u.role || '').toLowerCase().includes(q) || normalizedRole.includes(q);
       if (!matchName && !matchEmail && !matchPhone && !matchRole) return false;
     }
     return true;
@@ -78,7 +85,7 @@ export default function AdminUsersPage() {
             User Directory
           </h1>
           <p className="text-[11px] sm:text-xs text-gray-400 mt-0.5 sm:mt-1">
-            Registered property owners, tenants, and admin account permissions.
+            Registered property owners, tenants, sales executives, and admin account permissions.
           </p>
         </div>
 
@@ -95,7 +102,7 @@ export default function AdminUsersPage() {
       <div className="bg-[#0a110d] p-2.5 sm:p-4 rounded-2xl sm:rounded-3xl border border-emerald-950/90 shadow-xl flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3">
         {/* Role Filter Tabs */}
         <div className="flex flex-wrap gap-1 w-full sm:w-auto">
-          {(['all', 'owner', 'tenant', 'admin'] as const).map((r) => (
+          {(['all', 'owner', 'tenant', 'sales', 'admin'] as const).map((r) => (
             <button
               key={r}
               onClick={() => setRoleFilter(r)}
@@ -104,7 +111,7 @@ export default function AdminUsersPage() {
                   : 'bg-[#050806] text-gray-400 border border-emerald-950 hover:text-white'
                 }`}
             >
-              {r === 'all' ? 'All Roles' : `${r}s`}
+              {r === 'all' ? 'All Roles' : r === 'sales' ? 'Sales Executives' : `${r}s`}
             </button>
           ))}
         </div>
@@ -158,8 +165,9 @@ export default function AdminUsersPage() {
             filteredUsers.map((u) => {
               const roleKey = (u.role || '').toLowerCase();
               const isAdmin = roleKey.includes('admin');
+              const isSales = roleKey.includes('sales');
               const isOwner = roleKey.includes('owner') || roleKey.includes('landlord');
-              const displayRole = isAdmin ? 'Admin' : isOwner ? 'Owner' : 'Tenant';
+              const displayRole = isAdmin ? 'Admin' : isSales ? 'Sales Executive' : isOwner ? 'Owner' : 'Tenant';
 
               return (
                 <div
@@ -198,9 +206,11 @@ export default function AdminUsersPage() {
 
                     <span className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold whitespace-nowrap uppercase tracking-wider border shrink-0 ${isAdmin
                         ? 'bg-purple-950/80 text-purple-400 border-purple-800/80'
-                        : isOwner
-                          ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/80'
-                          : 'bg-cyan-950/80 text-cyan-400 border border-cyan-800/80'
+                        : isSales
+                          ? 'bg-amber-950/80 text-amber-400 border-amber-800/80'
+                          : isOwner
+                            ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/80'
+                            : 'bg-cyan-950/80 text-cyan-400 border border-cyan-800/80'
                       }`}>
                       {displayRole}
                     </span>
@@ -249,8 +259,9 @@ export default function AdminUsersPage() {
                 filteredUsers.map((u) => {
                   const roleKey = (u.role || '').toLowerCase();
                   const isAdmin = roleKey.includes('admin');
+                  const isSales = roleKey.includes('sales');
                   const isOwner = roleKey.includes('owner') || roleKey.includes('landlord');
-                  const displayRole = isAdmin ? 'Admin' : isOwner ? 'Owner' : 'Tenant';
+                  const displayRole = isAdmin ? 'Admin' : isSales ? 'Sales Executive' : isOwner ? 'Owner' : 'Tenant';
 
                   return (
                     <tr key={u.id || u._id || u.email} className="hover:bg-[#07120a] transition-colors">
@@ -286,9 +297,11 @@ export default function AdminUsersPage() {
                       <td className="p-3.5">
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap uppercase tracking-wider ${isAdmin
                             ? 'bg-purple-950/80 text-purple-400 border border-purple-800/80'
-                            : isOwner
-                              ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/80'
-                              : 'bg-cyan-950/80 text-cyan-400 border border-cyan-800/80'
+                            : isSales
+                              ? 'bg-amber-950/80 text-amber-400 border border-amber-800/80'
+                              : isOwner
+                                ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-800/80'
+                                : 'bg-cyan-950/80 text-cyan-400 border border-cyan-800/80'
                           }`}>
                           {displayRole}
                         </span>
